@@ -3,40 +3,45 @@ package ru.larpolingo.app
 import android.content.Context
 import android.content.SharedPreferences
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 
 /**
  * Настройки стрика и расчёт текущего значения.
  *
- * Хранится «якорь»: значение стрика [KEY_ANCHOR] на дату [KEY_DAY] и прирост за день [KEY_PER_DAY].
+ * Хранится «якорь»: значение стрика на дату и прирост за день.
  * Текущий стрик = якорь + прирост × (сколько дней прошло с даты якоря).
  */
 object Streak {
-    class Pic(val id: String, val res: Int, val title: String)
-    class Bg(val id: String, val res: Int, val title: String, val numColor: Int, val labelColor: Int)
+    enum class Flame(val res: Int, val title: String) {
+        ON(R.drawable.flame_on, "Горит"),
+        ALERT(R.drawable.flame_alert, "Под угрозой"),
+        OUTLINE(R.drawable.flame_outline, "Контур"),
+    }
 
-    val pics = listOf(
-        Pic("fire", R.drawable.pic_fire, "Огонь"),
-        Pic("owl_fire", R.drawable.pic_owl_fire, "Сова с огнём"),
-        Pic("owl", R.drawable.pic_owl, "Сова"),
-        Pic("gold", R.drawable.pic_gold, "Золотой"),
-        Pic("purple", R.drawable.pic_purple, "Фиолетовый"),
-        Pic("red", R.drawable.pic_red, "Красный"),
-        Pic("ice", R.drawable.pic_ice, "Заморозка"),
-        Pic("out", R.drawable.pic_out, "Потух"),
-        Pic("owl_sad", R.drawable.pic_owl_sad, "Грустная сова"),
+    enum class Sub(val title: String) { NONE("Нет"), TIMER("Таймер"), TEXT("Текст") }
+
+    /** Картинка виджета и её «родное» оформление, как в настоящем виджете. */
+    class Pic(
+        val id: String, val res: Int, val title: String,
+        val numColor: Int, val subColor: Int,
+        val flame: Flame, val sub: Sub, val text: String,
     )
 
-    val bgs = listOf(
-        Bg("white", R.drawable.bg_white, "Белый", 0xFFFF9600.toInt(), 0xFF777777.toInt()),
-        Bg("dark", R.drawable.bg_dark, "Тёмный", 0xFFFF9600.toInt(), 0xFFDCE6EC.toInt()),
-        Bg("orange", R.drawable.bg_orange, "Оранжевый", 0xFFFFFFFF.toInt(), 0xFFFFF1DC.toInt()),
-        Bg("green", R.drawable.bg_green, "Зелёный", 0xFFFFFFFF.toInt(), 0xFFEAFFD9.toInt()),
+    private fun c(v: Long) = v.toInt()
+
+    val pics = listOf(
+        Pic("teal_eyes", R.drawable.art_teal_eyes, "Огонь в глазах", c(0xFFFFA00F), c(0xFFFFFFFF), Flame.ON, Sub.NONE, ""),
+        Pic("blue_ice", R.drawable.art_blue_ice, "Замёрз у костра", c(0xFFFFA00F), c(0xFFFFFFFF), Flame.ON, Sub.NONE, ""),
+        Pic("red_thumbs", R.drawable.art_red_thumbs, "Till next time", c(0xFFFFA00F), c(0xFFFBE6DC), Flame.ON, Sub.TEXT, "Till next time!"),
+        Pic("meteor", R.drawable.art_meteor, "Метеор", c(0xFFFFF1CF), c(0xFFFFF1CF), Flame.OUTLINE, Sub.NONE, "See you again?"),
+        Pic("orange_stool", R.drawable.art_orange_stool, "Пожар", c(0xFFFCEDE6), c(0xFFFCEDE6), Flame.ALERT, Sub.TEXT, "Last chance..."),
+        Pic("purple_house", R.drawable.art_purple_house, "Горит дом", c(0xFFD6CEE2), c(0xFFD6CEE2), Flame.ALERT, Sub.TEXT, "Last chance!"),
+        Pic("purple_fire", R.drawable.art_purple_fire, "Фиолетовый гнев", c(0xFFD9CCE6), c(0xFFD9CCE6), Flame.ALERT, Sub.TIMER, ""),
+        Pic("laser", R.drawable.art_laser, "Лазеры", c(0xFFE9DCDC), c(0xFFE9DCDC), Flame.ALERT, Sub.TIMER, ""),
     )
 
     const val MAX = 999_999_999L
-    private const val KEY_ANCHOR = "anchor"
-    private const val KEY_DAY = "day"
-    private const val KEY_PER_DAY = "perDay"
 
     private fun prefs(ctx: Context): SharedPreferences =
         ctx.getSharedPreferences("streak", Context.MODE_PRIVATE)
@@ -46,45 +51,56 @@ object Streak {
     /** Значение стрика через [plusDays] дней от сегодня. */
     fun value(ctx: Context, plusDays: Long = 0): Long {
         val p = prefs(ctx)
-        val anchor = p.getLong(KEY_ANCHOR, 1)
-        val day = p.getLong(KEY_DAY, today())
-        val perDay = p.getLong(KEY_PER_DAY, 0)
+        val anchor = p.getLong("anchor", 1)
+        val day = p.getLong("day", today())
+        val perDay = p.getLong("perDay", 0)
         val passed = (today() + plusDays - day).coerceAtLeast(0)
         // без переполнения: если прирост огромный, просто упираемся в максимум
         val grow = if (perDay != 0L && passed > (MAX / perDay)) MAX else perDay * passed
         return (anchor + grow).coerceIn(0, MAX)
     }
 
-    fun perDay(ctx: Context): Long = prefs(ctx).getLong(KEY_PER_DAY, 0)
+    fun perDay(ctx: Context): Long = prefs(ctx).getLong("perDay", 0)
 
     /** Задать стрик вручную: отсчёт роста начинается заново с сегодняшнего дня. */
     fun setValue(ctx: Context, v: Long) {
-        prefs(ctx).edit().putLong(KEY_ANCHOR, v.coerceIn(0, MAX)).putLong(KEY_DAY, today()).apply()
+        prefs(ctx).edit().putLong("anchor", v.coerceIn(0, MAX)).putLong("day", today()).apply()
     }
 
     /** Сменить прирост за день, сохранив уже набранное значение. */
     fun setPerDay(ctx: Context, k: Long) {
         val cur = value(ctx)
         prefs(ctx).edit()
-            .putLong(KEY_ANCHOR, cur).putLong(KEY_DAY, today())
-            .putLong(KEY_PER_DAY, k.coerceIn(0, MAX)).apply()
+            .putLong("anchor", cur).putLong("day", today())
+            .putLong("perDay", k.coerceIn(0, MAX)).apply()
     }
 
     fun pic(ctx: Context): Pic = prefs(ctx).getString("pic", null).let { id -> pics.firstOrNull { it.id == id } ?: pics[0] }
-    fun setPic(ctx: Context, p: Pic) = prefs(ctx).edit().putString("pic", p.id).apply()
 
-    fun bg(ctx: Context): Bg = prefs(ctx).getString("bg", null).let { id -> bgs.firstOrNull { it.id == id } ?: bgs[0] }
-    fun setBg(ctx: Context, b: Bg) = prefs(ctx).edit().putString("bg", b.id).apply()
+    /** Выбор картинки сразу подставляет её значок и подпись — их потом можно поменять. */
+    fun setPic(ctx: Context, p: Pic) = prefs(ctx).edit()
+        .putString("pic", p.id).putString("flame", p.flame.name)
+        .putString("sub", p.sub.name).putString("text", p.text).apply()
 
-    /** «день / дня / дней ударного режима» по правилам русского языка. */
-    fun label(n: Long): String {
-        val d10 = n % 10; val d100 = n % 100
-        val w = when {
-            d100 in 11..14 -> "дней"
-            d10 == 1L -> "день"
-            d10 in 2..4 -> "дня"
-            else -> "дней"
-        }
-        return "$w ударного режима"
+    fun flame(ctx: Context): Flame =
+        prefs(ctx).getString("flame", null)?.let { runCatching { Flame.valueOf(it) }.getOrNull() } ?: pic(ctx).flame
+    fun setFlame(ctx: Context, f: Flame) = prefs(ctx).edit().putString("flame", f.name).apply()
+
+    fun sub(ctx: Context): Sub =
+        prefs(ctx).getString("sub", null)?.let { runCatching { Sub.valueOf(it) }.getOrNull() } ?: pic(ctx).sub
+    fun setSub(ctx: Context, s: Sub) = prefs(ctx).edit().putString("sub", s.name).apply()
+
+    fun text(ctx: Context): String = prefs(ctx).getString("text", null) ?: pic(ctx).text
+    fun setText(ctx: Context, t: String) = prefs(ctx).edit().putString("text", t).apply()
+
+    /** Сколько миллисекунд осталось до полуночи — для таймера «до конца дня». */
+    fun msToMidnight(): Long {
+        val now = LocalDateTime.now()
+        return ChronoUnit.MILLIS.between(now, now.toLocalDate().plusDays(1).atStartOfDay())
+    }
+
+    /** Размер числа: чем больше цифр, тем мельче, чтобы влезало в виджет. */
+    fun numSize(n: Long): Float = when (n.toString().length) {
+        in 0..4 -> 36f; 5 -> 30f; 6 -> 26f; 7 -> 22f; else -> 19f
     }
 }

@@ -10,6 +10,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.StateListDrawable
 import android.os.Bundle
+import android.os.SystemClock
 import android.text.Editable
 import android.text.InputFilter
 import android.text.InputType
@@ -18,6 +19,7 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.widget.Chronometer
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -41,8 +43,10 @@ class MainActivity : Activity() {
     private lateinit var daysEdit: EditText
     private lateinit var tomorrow: TextView
     private lateinit var customEdit: EditText
+    private lateinit var subEdit: EditText
     private val picCells = mutableListOf<View>()
-    private val bgCells = mutableListOf<TextView>()
+    private val flameCells = mutableListOf<TextView>()
+    private val subCells = mutableListOf<TextView>()
     private val growCells = mutableListOf<TextView>()
     private var quiet = false
 
@@ -64,25 +68,18 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         })
 
-        // ── превью виджета
+        // ── превью виджета (тот же макет, что и на рабочем столе)
         val frame = FrameLayout(this)
         preview = LayoutInflater.from(this).inflate(R.layout.widget, frame, false)
-        frame.addView(preview, FrameLayout.LayoutParams(dp(170), dp(170), Gravity.CENTER))
-        col.addView(frame, LinearLayout.LayoutParams(-1, dp(190)).apply { topMargin = dp(8) })
+        frame.addView(preview, FrameLayout.LayoutParams(dp(180), dp(180), Gravity.CENTER))
+        col.addView(frame, LinearLayout.LayoutParams(-1, dp(196)).apply { topMargin = dp(8) })
 
         // ── дни стрика
         col.addView(header("Дней в стрике"))
         val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        daysEdit = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_NUMBER
-            filters = arrayOf(InputFilter.LengthFilter(9))
-            textSize = 26f
+        daysEdit = field(9, 26f).apply {
             typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
             setTextColor(0xFFFF9600.toInt())
-            gravity = Gravity.CENTER
-            background = box(Color.WHITE, gray)
-            imeOptions = EditorInfo.IME_ACTION_DONE
-            setSingleLine()
         }
         row.addView(stepButton("−", -1), LinearLayout.LayoutParams(dp(56), dp(56)))
         row.addView(daysEdit, LinearLayout.LayoutParams(0, dp(56), 1f).apply { leftMargin = dp(10); rightMargin = dp(10) })
@@ -101,26 +98,49 @@ class MainActivity : Activity() {
             val cell = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
-                setPadding(dp(6), dp(8), dp(6), dp(6))
+                setPadding(dp(6), dp(6), dp(6), dp(4))
                 setOnClickListener { Streak.setPic(this@MainActivity, p); refresh() }
             }
-            cell.addView(ImageView(this).apply { setImageResource(p.res) }, LinearLayout.LayoutParams(dp(56), dp(56)))
+            cell.addView(ImageView(this).apply {
+                setImageResource(p.res)
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                background = GradientDrawable().apply { cornerRadius = dp(14).toFloat(); setColor(Color.BLACK) }
+                clipToOutline = true
+            }, LinearLayout.LayoutParams(dp(84), dp(84)))
             cell.addView(TextView(this).apply {
                 text = p.title; textSize = 11f; setTextColor(textGray); gravity = Gravity.CENTER
-                setLines(2); maxWidth = dp(72)
+                setLines(2); maxWidth = dp(90)
             })
             cell.tag = p.id
             picCells += cell
-            pics.addView(cell, LinearLayout.LayoutParams(dp(80), -2).apply { rightMargin = dp(8) })
+            pics.addView(cell, LinearLayout.LayoutParams(dp(98), -2).apply { rightMargin = dp(8) })
         }
         col.addView(HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             addView(pics)
         })
 
-        // ── фон
-        col.addView(header("Фон виджета"))
-        col.addView(chips(Streak.bgs.map { it.title }, bgCells) { i -> Streak.setBg(this, Streak.bgs[i]); refresh() })
+        // ── значок огня
+        col.addView(header("Значок"))
+        col.addView(chips(Streak.Flame.entries.map { it.title }, flameCells) { i ->
+            Streak.setFlame(this, Streak.Flame.entries[i]); refresh()
+        })
+
+        // ── подпись под числом
+        col.addView(header("Подпись"))
+        col.addView(chips(Streak.Sub.entries.map { it.title }, subCells) { i ->
+            Streak.setSub(this, Streak.Sub.entries[i]); refresh()
+        })
+        subEdit = field(40, 17f).apply {
+            inputType = InputType.TYPE_CLASS_TEXT
+            hint = "например, Last chance!"
+            setTextColor(textDark)
+        }
+        subEdit.addTextChangedListener(watch {
+            if (quiet) return@watch
+            Streak.setText(this, it); refresh(keepSub = true)
+        })
+        col.addView(subEdit, LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(10) })
 
         // ── авторост
         col.addView(header("Автоматический рост"))
@@ -136,16 +156,9 @@ class MainActivity : Activity() {
             }
             refresh()
         })
-        customEdit = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_NUMBER
-            filters = arrayOf(InputFilter.LengthFilter(7))
+        customEdit = field(7, 18f).apply {
             hint = "сколько дней прибавлять каждый день"
-            textSize = 18f
             setTextColor(textDark)
-            gravity = Gravity.CENTER
-            background = box(Color.WHITE, gray)
-            imeOptions = EditorInfo.IME_ACTION_DONE
-            setSingleLine()
         }
         customEdit.addTextChangedListener(watch {
             if (quiet) return@watch
@@ -194,23 +207,40 @@ class MainActivity : Activity() {
     }
 
     /** Перерисовать превью, выбранные пункты и все виджеты на рабочем столе. */
-    private fun refresh(keepDays: Boolean = false, keepCustom: Boolean = false) {
+    private fun refresh(keepDays: Boolean = false, keepCustom: Boolean = false, keepSub: Boolean = false) {
         quiet = true
         val n = Streak.value(this)
         val pic = Streak.pic(this)
-        val bg = Streak.bg(this)
+        val flame = Streak.flame(this)
+        val sub = Streak.sub(this)
         val k = Streak.perDay(this)
 
-        preview.setBackgroundResource(bg.res)
-        preview.findViewById<ImageView>(R.id.pic).setImageResource(pic.res)
-        preview.findViewById<TextView>(R.id.num).apply { text = n.toString(); setTextColor(bg.numColor) }
-        preview.findViewById<TextView>(R.id.label).apply { text = Streak.label(n); setTextColor(bg.labelColor) }
+        preview.findViewById<ImageView>(R.id.art).setImageResource(pic.res)
+        preview.findViewById<ImageView>(R.id.flame).setImageResource(flame.res)
+        preview.findViewById<TextView>(R.id.num).apply {
+            text = n.toString(); textSize = Streak.numSize(n); setTextColor(pic.numColor)
+        }
+        preview.findViewById<TextView>(R.id.sub).apply {
+            text = Streak.text(this@MainActivity); setTextColor(pic.subColor)
+            visibility = if (sub == Streak.Sub.TEXT) View.VISIBLE else View.GONE
+        }
+        preview.findViewById<Chronometer>(R.id.timer).apply {
+            setTextColor(pic.subColor)
+            visibility = if (sub == Streak.Sub.TIMER) View.VISIBLE else View.GONE
+            isCountDown = true
+            base = SystemClock.elapsedRealtime() + Streak.msToMidnight()
+            if (sub == Streak.Sub.TIMER) start() else stop()
+        }
 
         if (!keepDays && daysEdit.text.toString() != n.toString()) {
             daysEdit.setText(n.toString()); daysEdit.setSelection(daysEdit.text.length)
         }
         for (c in picCells) c.background = if (c.tag == pic.id) box(blueLight, blue) else box(Color.WHITE, gray)
-        select(bgCells, Streak.bgs.indexOf(bg))
+        select(flameCells, flame.ordinal)
+        select(subCells, sub.ordinal)
+        subEdit.visibility = if (sub == Streak.Sub.TEXT) View.VISIBLE else View.GONE
+        if (!keepSub) subEdit.setText(Streak.text(this))
+
         val growIdx = when (k) { 0L -> 0; 1L -> 1; 10L -> 2; else -> 3 }
         val customShown = growIdx == 3 || customEdit.hasFocus()
         select(growCells, if (customEdit.hasFocus()) 3 else growIdx)
@@ -224,6 +254,16 @@ class MainActivity : Activity() {
     }
 
     // ── мелкие помощники оформления в стиле Duolingo
+
+    private fun field(maxLen: Int, size: Float) = EditText(this).apply {
+        inputType = InputType.TYPE_CLASS_NUMBER
+        filters = arrayOf(InputFilter.LengthFilter(maxLen))
+        textSize = size
+        gravity = Gravity.CENTER
+        background = box(Color.WHITE, gray)
+        imeOptions = EditorInfo.IME_ACTION_DONE
+        setSingleLine()
+    }
 
     private fun header(t: String) = TextView(this).apply {
         text = t
@@ -256,7 +296,7 @@ class MainActivity : Activity() {
                 typeface = Typeface.DEFAULT_BOLD
                 gravity = Gravity.CENTER
                 setPadding(dp(4), 0, dp(4), 0)
-                setOnClickListener { customEdit.clearFocus(); onPick(i) }
+                setOnClickListener { customEdit.clearFocus(); subEdit.clearFocus(); onPick(i) }
             }
             out += c
             wrap.addView(c, LinearLayout.LayoutParams(0, dp(46), 1f).apply { if (i > 0) leftMargin = dp(8) })
