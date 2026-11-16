@@ -22,7 +22,6 @@ import android.view.inputmethod.EditorInfo
 import android.widget.Chronometer
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -93,32 +92,35 @@ class MainActivity : Activity() {
 
         // ── картинка
         col.addView(header("Картинка"))
-        val pics = LinearLayout(this)
-        for (p in Streak.pics) {
+        // сетка по 4 картинки в ряд
+        val perRow = 4
+        var line: LinearLayout? = null
+        Streak.pics.forEachIndexed { i, p ->
+            if (i % perRow == 0) line = LinearLayout(this).also { col.addView(it) }
             val cell = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
-                setPadding(dp(6), dp(6), dp(6), dp(4))
+                setPadding(dp(4), dp(4), dp(4), dp(2))
                 setOnClickListener { Streak.setPic(this@MainActivity, p); refresh() }
             }
             cell.addView(ImageView(this).apply {
                 setImageResource(p.res)
                 scaleType = ImageView.ScaleType.CENTER_CROP
-                background = GradientDrawable().apply { cornerRadius = dp(14).toFloat(); setColor(Color.BLACK) }
+                background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(Color.BLACK) }
                 clipToOutline = true
-            }, LinearLayout.LayoutParams(dp(84), dp(84)))
+            }, LinearLayout.LayoutParams(-1, dp(72)))
             cell.addView(TextView(this).apply {
-                text = p.title; textSize = 11f; setTextColor(textGray); gravity = Gravity.CENTER
-                setLines(2); maxWidth = dp(90)
+                text = p.title; textSize = 10f; setTextColor(textGray); gravity = Gravity.CENTER
+                setLines(2)
             })
             cell.tag = p.id
             picCells += cell
-            pics.addView(cell, LinearLayout.LayoutParams(dp(98), -2).apply { rightMargin = dp(8) })
+            line!!.addView(cell, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(3), dp(3), dp(3), dp(3)) })
         }
-        col.addView(HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            addView(pics)
-        })
+        // добить последний ряд пустыми ячейками, чтобы картинки не растягивались
+        repeat((perRow - Streak.pics.size % perRow) % perRow) {
+            line!!.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f).apply { setMargins(dp(3), dp(3), dp(3), dp(3)) })
+        }
 
         // ── значок огня
         col.addView(header("Значок"))
@@ -216,7 +218,10 @@ class MainActivity : Activity() {
         val k = Streak.perDay(this)
 
         preview.findViewById<ImageView>(R.id.art).setImageResource(pic.res)
-        preview.findViewById<ImageView>(R.id.flame).setImageResource(flame.res)
+        preview.findViewById<ImageView>(R.id.flame).apply {
+            setImageResource(flame.res)
+            setColorFilter(if (flame == Streak.Flame.TINT) pic.numColor else 0)
+        }
         preview.findViewById<TextView>(R.id.num).apply {
             text = n.toString(); textSize = Streak.numSize(n); setTextColor(pic.numColor)
         }
