@@ -9,7 +9,10 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.StateListDrawable
+import android.graphics.Rect
+import android.os.Build
 import android.os.Bundle
+import android.view.WindowInsets
 import android.os.SystemClock
 import android.text.Editable
 import android.text.InputFilter
@@ -39,6 +42,7 @@ class MainActivity : Activity() {
     private val textGray = 0xFF777777.toInt()
 
     private lateinit var preview: View
+    private lateinit var scroll: ScrollView
     private lateinit var daysEdit: EditText
     private lateinit var tomorrow: TextView
     private lateinit var customEdit: EditText
@@ -124,7 +128,7 @@ class MainActivity : Activity() {
 
         // ── значок огня
         col.addView(header("Значок"))
-        col.addView(chips(Streak.Flame.entries.map { it.title }, flameCells) { i ->
+        col.addView(chips(Streak.Flame.entries.map { it.title }, flameCells, perRow = 3) { i ->
             Streak.setFlame(this, Streak.Flame.entries[i]); refresh()
         })
 
@@ -173,8 +177,9 @@ class MainActivity : Activity() {
 
         // ── экран: прокручиваемые настройки + кнопка внизу
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.WHITE) }
-        root.addView(ScrollView(this).apply { addView(col) }, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(TextView(this).apply {
+        scroll = ScrollView(this).apply { addView(col) }
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        val createBtn = TextView(this).apply {
             text = "СОЗДАТЬ ВИДЖЕТ"
             textSize = 17f
             typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
@@ -184,8 +189,25 @@ class MainActivity : Activity() {
             background = button3d(green, greenDark)
             isClickable = true
             setOnClickListener { createWidget() }
-        }, LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(dp(20), dp(8), dp(20), dp(16)) })
+        }
+        root.addView(createBtn, LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(dp(20), dp(8), dp(20), dp(16)) })
         setContentView(root)
+
+        // Клавиатура и системные панели. На Android 15 приложение всегда рисуется «от края до края»,
+        // и adjustResize больше не сжимает экран сам — отступы ставим вручную.
+        if (Build.VERSION.SDK_INT >= 30) {
+            window.setDecorFitsSystemWindows(false)
+            root.setOnApplyWindowInsetsListener { v, ins ->
+                val bars = ins.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                val ime = ins.getInsets(WindowInsets.Type.ime())
+                val imeOn = ins.isVisible(WindowInsets.Type.ime())
+                v.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, ime.bottom))
+                // пока открыта клавиатура, кнопку прячем, чтобы полю ввода хватило места
+                createBtn.visibility = if (imeOn) View.GONE else View.VISIBLE
+                if (imeOn) scroll.post { currentFocus?.let { f -> scrollToView(scroll, f) } }
+                WindowInsets.CONSUMED
+            }
+        }
         refresh()
     }
 
@@ -219,7 +241,8 @@ class MainActivity : Activity() {
 
         preview.findViewById<ImageView>(R.id.art).setImageResource(pic.res)
         preview.findViewById<ImageView>(R.id.flame).apply {
-            setImageResource(flame.res)
+            visibility = if (flame == Streak.Flame.NONE) View.GONE else View.VISIBLE
+            if (flame != Streak.Flame.NONE) setImageResource(flame.res)
             setColorFilter(if (flame == Streak.Flame.TINT) pic.numColor else 0)
         }
         preview.findViewById<TextView>(R.id.num).apply {
@@ -258,6 +281,17 @@ class MainActivity : Activity() {
         StreakWidget.updateAll(this)
     }
 
+    /** Прокрутить так, чтобы поле ввода было видно над клавиатурой (с небольшим запасом). */
+    private fun scrollToView(scroll: ScrollView, v: View) {
+        val r = Rect(); v.getDrawingRect(r)
+        scroll.offsetDescendantRectToMyCoords(v, r)
+        val top = r.top - dp(80)
+        val bottom = r.bottom + dp(24)
+        val y = scroll.scrollY
+        if (top < y) scroll.smoothScrollTo(0, top.coerceAtLeast(0))
+        else if (bottom > y + scroll.height) scroll.smoothScrollTo(0, bottom - scroll.height)
+    }
+
     // ── мелкие помощники оформления в стиле Duolingo
 
     private fun field(maxLen: Int, size: Float) = EditText(this).apply {
@@ -268,6 +302,8 @@ class MainActivity : Activity() {
         background = box(Color.WHITE, gray)
         imeOptions = EditorInfo.IME_ACTION_DONE
         setSingleLine()
+        // при переходе между полями с уже открытой клавиатурой тоже докручиваем до поля
+        setOnFocusChangeListener { v, has -> if (has) v.postDelayed({ scrollToView(scroll, v) }, 250) }
     }
 
     private fun header(t: String) = TextView(this).apply {
@@ -292,9 +328,14 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun chips(titles: List<String>, out: MutableList<TextView>, onPick: (Int) -> Unit): View {
-        val wrap = LinearLayout(this)
+    private fun chips(titles: List<String>, out: MutableList<TextView>, perRow: Int = titles.size, onPick: (Int) -> Unit): View {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        var wrap = LinearLayout(this)
         titles.forEachIndexed { i, t ->
+            if (i % perRow == 0) {
+                wrap = LinearLayout(this)
+                box.addView(wrap, LinearLayout.LayoutParams(-1, -2).apply { if (i > 0) topMargin = dp(8) })
+            }
             val c = TextView(this).apply {
                 text = t
                 textSize = 13f
@@ -304,9 +345,13 @@ class MainActivity : Activity() {
                 setOnClickListener { customEdit.clearFocus(); subEdit.clearFocus(); onPick(i) }
             }
             out += c
-            wrap.addView(c, LinearLayout.LayoutParams(0, dp(46), 1f).apply { if (i > 0) leftMargin = dp(8) })
+            wrap.addView(c, LinearLayout.LayoutParams(0, dp(46), 1f).apply { if (i % perRow > 0) leftMargin = dp(8) })
         }
-        return wrap
+        // пустые места в последнем ряду, чтобы кнопки были одной ширины
+        repeat((perRow - titles.size % perRow) % perRow) {
+            wrap.addView(View(this), LinearLayout.LayoutParams(0, dp(46), 1f).apply { leftMargin = dp(8) })
+        }
+        return box
     }
 
     private fun select(cells: List<TextView>, idx: Int) = cells.forEachIndexed { i, c ->

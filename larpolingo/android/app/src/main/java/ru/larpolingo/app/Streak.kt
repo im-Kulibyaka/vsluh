@@ -18,6 +18,14 @@ object Streak {
         ALERT(R.drawable.flame_alert, "Под угрозой"),
         OUTLINE(R.drawable.flame_outline, "Контур"),
         TINT(R.drawable.flame_mono, "В цвет числа"),
+        DONE(R.drawable.flame_done, "Выполнено"),
+        ICE(R.drawable.flame_ice, "Ледяной"),
+        FROZEN(R.drawable.flame_frozen, "Заморозка"),
+        GOLD(R.drawable.flame_gold, "Золотой"),
+        PURPLE(R.drawable.flame_purple, "Фиолетовый"),
+        RED(R.drawable.flame_red, "Красный"),
+        GRAY(R.drawable.flame_gray, "Потух"),
+        NONE(0, "Без значка"),
     }
 
     enum class Sub(val title: String) { NONE("Нет"), TIMER("Таймер"), TEXT("Текст") }

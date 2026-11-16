@@ -51,7 +51,8 @@ class StreakWidget : AppWidgetProvider() {
             return RemoteViews(ctx.packageName, R.layout.widget).apply {
                 setImageViewResource(R.id.art, pic.res)
                 val flame = Streak.flame(ctx)
-                setImageViewResource(R.id.flame, flame.res)
+                setViewVisibility(R.id.flame, if (flame == Streak.Flame.NONE) View.GONE else View.VISIBLE)
+                if (flame != Streak.Flame.NONE) setImageViewResource(R.id.flame, flame.res)
                 setInt(R.id.flame, "setColorFilter", if (flame == Streak.Flame.TINT) pic.numColor else 0)
                 setTextViewText(R.id.num, n.toString())
                 setTextViewTextSize(R.id.num, TypedValue.COMPLEX_UNIT_SP, Streak.numSize(n))
