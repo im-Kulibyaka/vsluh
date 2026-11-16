@@ -105,6 +105,28 @@ final class RemoteModel: ObservableObject {
         }
     }
 
+    /// Библиотека пультов: произвольный паттерн (мкс) с частотой через текущий передатчик.
+    func sendLibrary(_ pattern: [Int], freq: Int, status: String) {
+        if mode != .http && !routeOK {
+            say("ИК-порт не найден: нужен звуковой адаптер или Wi-Fi передатчик [tx]", err: true)
+            return
+        }
+        say(status)
+        let mode = self.mode, host = self.host
+        let audio = mode == .audio1 ? audio1 : audio2
+        io.async { [weak self] in
+            do {
+                if mode == .http {
+                    try TasmotaIr(host: host).sendRawPattern(pattern, freq: freq)
+                } else {
+                    try audio.transmit(pattern, carrierHz: freq)
+                }
+            } catch {
+                DispatchQueue.main.async { self?.say(error.localizedDescription, err: true) }
+            }
+        }
+    }
+
     func sendFrame(_ pattern: [Int], proto: String, bits: Int, data: String, status: String) {
         say(status)
         let mode = self.mode, host = self.host

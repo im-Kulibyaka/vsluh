@@ -106,6 +106,8 @@ struct ContentView: View {
                     ScriptPanel(model: model).padding(.top, 12)
                 } else if tab == "touchpad" {
                     TouchpadPanel(model: model).padding(.top, 12)
+                } else if tab == "lib" {
+                    LibraryPanel(model: model).padding(.top, 12)
                 } else {
                     boardsArea.padding(.top, 12)
                 }
@@ -544,6 +546,9 @@ extension ContentView {
         if tab == "touchpad" {
             return "тачпад :: krisa37 HID :: " + hid.status
         }
+        if tab == "lib" {
+            return "библиотека :: ИК-пульты"
+        }
         if tab == "scripts" {
             let list: [KScript] = ScriptStore.load(scriptsJSON)
             let i: Int = min(max(scriptCur, 0), list.count - 1)
@@ -572,7 +577,7 @@ extension ContentView {
     typealias TabSpec = (id: String, title: String, weight: CGFloat)
 
     private static let tabs1: [TabSpec] = [("boards", "Доски", 7.5), ("proj", "Проекторы", 11.5), ("ac", "Кондиционеры", 14.5)]
-    private static let tabs2: [TabSpec] = [("scripts", "Сценарии", 10.5), ("touchpad", "Тачпад", 8.5), ("color", "Цвет", 6.5)]
+    private static let tabs2: [TabSpec] = [("scripts", "Сценарии", 10.5), ("touchpad", "Тачпад", 8.5), ("lib", "Библиотека", 12.5), ("color", "Цвет", 6.5)]
 
     private func tabRow(_ tabs: [TabSpec], width: CGFloat) -> some View {
         HStack(spacing: 8) {
