@@ -95,6 +95,11 @@ object Streak {
         Pic("x_big_flame", R.drawable.art_x_big_flame, "Большой огонь", c(0xFFFF9600), c(0xFFFF9600), Flame.NONE, Sub.TEXT, "day language streak!"),
         Pic("x_lava", R.drawable.art_x_lava, "Прыжки по лаве", c(0xFFFFF1E0), c(0xFFFFF1E0), Flame.TINT, Sub.TEXT, "Keep it going!"),
         Pic("x_shocked", R.drawable.art_x_shocked, "В шоке", c(0xFFFFC9D9), c(0xFFFFC9D9), Flame.ALERT, Sub.TEXT, "It's getting late!"),
+        // присланные скриншоты (второй набор)
+        Pic("u_walk", R.drawable.art_u_walk, "Прогулка с огоньком", c(0xFFFF9F2E), c(0xFFE8DDE8), Flame.ON, Sub.TEXT, "Keep it up!"),
+        Pic("u_fly", R.drawable.art_u_fly, "Летит в огне", c(0xFFFF9F2E), c(0xFFE8DDE8), Flame.ON, Sub.TEXT, "Keep it up!"),
+        Pic("u_pan", R.drawable.art_u_pan, "На сковородке", c(0xFFFF9F2E), c(0xFFF2E6F0), Flame.ON, Sub.TEXT, "Уже скучаю по вам!"),
+        Pic("u_rope", R.drawable.art_u_rope, "Скакалка", c(0xFFFFFFFF), c(0xFF8A4B00), Flame.ON, Sub.NONE, ""),
     )
 
     const val MAX = 999_999_999L
