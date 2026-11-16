@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">larpolingo</string>
+    <string name="widget_name">Ударный режим</string>
+    <string name="widget_desc">Стрик в стиле Duolingo</string>
+</resources>
