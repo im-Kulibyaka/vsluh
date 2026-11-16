@@ -320,7 +320,7 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
  * Поле-тачпад: один палец — курсор, касание — клик, два пальца — правый клик и прокрутка,
  * долгое нажатие и движение — перетаскивание.
  */
-class TouchpadView(c: Context, private val sens: () -> Float, private val link: () -> HidLink?) : View(c) {
+class TouchpadView(c: Context, private val sens: () -> Float, private val link: () -> HidLink?, private val drawMode: () -> Boolean = { false }) : View(c) {
     private val d = c.resources.displayMetrics.density
     private val frame = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = d }
     private val dot = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -331,6 +331,7 @@ class TouchpadView(c: Context, private val sens: () -> Float, private val link: 
     private var lastX = 0f; private var lastY = 0f; private var lastT = 0L
     private var downX = 0f; private var downY = 0f; private var downT = 0L
     private var maxPointers = 1; private var moved = false; private var dragging = false
+    private var drawing = false
     private var scrollY = 0f
 
     private val longPress = Runnable {
@@ -339,13 +340,13 @@ class TouchpadView(c: Context, private val sens: () -> Float, private val link: 
 
     override fun onDraw(cv: Canvas) {
         box.set(d, d, width - d, height - d)
-        fill.color = if (dragging) Term.FAINT else Term.BG; fill.alpha = 150
+        fill.color = if (dragging || drawing) Term.FAINT else Term.BG; fill.alpha = 150
         cv.drawRoundRect(box, 12 * d, 12 * d, fill)
         dot.color = Term.DIM; dot.alpha = 110
         val step = 22 * d
         var y = step / 2
         while (y < height) { var x = step / 2; while (x < width) { cv.drawCircle(x, y, 1.3f * d, dot); x += step }; y += step }
-        frame.color = if (dragging) Term.FG else Term.LINE
+        frame.color = if (dragging || drawing) Term.FG else Term.LINE
         cv.drawRoundRect(box, 12 * d, 12 * d, frame)
     }
 
@@ -355,14 +356,24 @@ class TouchpadView(c: Context, private val sens: () -> Float, private val link: 
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = e.x; downY = e.y; downT = e.eventTime; lastX = e.x; lastY = e.y; lastT = e.eventTime
-                maxPointers = 1; moved = false; dragging = false; scrollY = 0f
-                postDelayed(longPress, 500)
+                maxPointers = 1; moved = false; dragging = false; drawing = false; scrollY = 0f
+                if (drawMode()) { drawing = true; l?.buttons(1); performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); invalidate() }
+                else postDelayed(longPress, 500)
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
                 maxPointers = maxOf(maxPointers, e.pointerCount); removeCallbacks(longPress)
                 lastY = avgY(e)
             }
             MotionEvent.ACTION_MOVE -> {
+                if (drawing) {
+                    // рисование: ведём курсор с зажатой левой кнопкой сразу, без порога
+                    val dx = e.x - lastX; val dy = e.y - lastY; val dt = maxOf(1L, e.eventTime - lastT)
+                    val speed = hypot(dx, dy) / d / dt
+                    val k = sens() * (0.8f + min(speed * 1.6f, 2.4f)) / d * 1.6f
+                    l?.move(dx * k, dy * k)
+                    lastX = e.x; lastY = e.y; lastT = e.eventTime
+                    return true
+                }
                 if (e.pointerCount >= 2) {
                     val y = avgY(e); scrollY += y - lastY; lastY = y
                     if (abs(scrollY) > 2 * slop) moved = true
@@ -381,7 +392,8 @@ class TouchpadView(c: Context, private val sens: () -> Float, private val link: 
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 removeCallbacks(longPress)
-                if (dragging) { l?.buttons(0); dragging = false; invalidate() }
+                if (drawing) { l?.buttons(0); drawing = false; invalidate() }
+                else if (dragging) { l?.buttons(0); dragging = false; invalidate() }
                 else if (e.actionMasked == MotionEvent.ACTION_UP && !moved && e.eventTime - downT < 300) {
                     l?.click(if (maxPointers >= 2) 2 else 1)
                     performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)

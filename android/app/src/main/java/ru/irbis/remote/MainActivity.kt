@@ -139,7 +139,7 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
-        if (stickyMods != 0) hidReleaseAll()      // свернули приложение — ничего не оставляем зажатым
+        if (hidAnyHeld()) hidReleaseAll()      // свернули приложение — ничего не оставляем зажатым
     }
 
     override fun onResume() {
@@ -339,9 +339,10 @@ class MainActivity : Activity() {
         tabColor = ruTab("Цвет", TAB_COLOR)
         tabScripts = ruTab("Сценарии", TAB_SCRIPTS)
         tabTouch = ruTab("Тачпад", TAB_TOUCH)
-        // два ряда вкладок: устройства сверху, «Сценарии», «Рулетка» и «Цвет» — во втором; ширина — по длине подписи
+        tabLib = ruTab("Библиотека", TAB_LIB)
+        // два ряда вкладок: устройства сверху, «Сценарии», «Рулетка», «Цвет» и «Библиотека» — во втором; ширина — по длине подписи
         val tabs2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
-        for ((row, list) in listOf(tabs to listOf(tabBoards, tabProj, tabAc), tabs2 to listOf(tabScripts, tabTouch, tabRoulette, tabColor!!))) {
+        for ((row, list) in listOf(tabs to listOf(tabBoards, tabProj, tabAc), tabs2 to listOf(tabScripts, tabTouch, tabRoulette, tabColor!!, tabLib))) {
             list.forEachIndexed { i, t ->
                 row.addView(t, LinearLayout.LayoutParams(0, dp(40), t.text.length + 2.5f).apply { if (i > 0) leftMargin = dp(4) })
             }
@@ -363,6 +364,8 @@ class MainActivity : Activity() {
         root.addView(mocPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         colorPanel = if (Term.thermal) buildHeatPanel() else if (Term.blueprint) buildShadePanel() else if (Term.prism) buildPrismPanel() else buildColorPanel()
         root.addView(colorPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        libPanel = buildLibPanel()
+        root.addView(libPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         val prefs = getPreferences(MODE_PRIVATE)
         // старые вкладки IRBIS / MocTec теперь подвкладки «Досок»
         val start = when (val t = prefs.getString(PREF_TAB, null)) {
@@ -478,9 +481,12 @@ class MainActivity : Activity() {
         scriptPanel.visibility = if (tab == TAB_SCRIPTS) View.VISIBLE else View.GONE
         styleTab(tabTouch, tab == TAB_TOUCH)
         touchPanel.visibility = if (tab == TAB_TOUCH) View.VISIBLE else View.GONE
-        if (tab == TAB_TOUCH) hidAutoConnect() else if (::touchPanel.isInitialized && stickyMods != 0) hidReleaseAll()
+        if (tab == TAB_TOUCH) hidAutoConnect() else if (::touchPanel.isInitialized && hidAnyHeld()) hidReleaseAll()
         mocPanel.visibility = if (tab == TAB_ROULETTE) View.VISIBLE else View.GONE
         colorPanel?.visibility = if (tab == TAB_COLOR) View.VISIBLE else View.GONE
+        if (::tabLib.isInitialized) styleTab(tabLib, tab == TAB_LIB)
+        if (::libPanel.isInitialized) libPanel.visibility = if (tab == TAB_LIB) View.VISIBLE else View.GONE
+        if (tab == TAB_LIB) loadLibIndex()
         subtitle.text = when (tab) {
             TAB_BOARDS -> boardSubtitle()
             TAB_AC -> acSubtitle()
@@ -489,12 +495,14 @@ class MainActivity : Activity() {
             TAB_ROULETTE -> "рулетка :: подбор :: NEC"
             TAB_PROJ -> PROJECTORS[projIdx].let { "проектор :: ${it.brand} :: ${projSource(it)}" }
             TAB_COLOR -> if (Term.thermal) "thermal :: palette" else if (Term.blueprint) "blueprint :: оттенок" else if (Term.prism) "призма :: стекло и свет" else "terminal :: phosphor color"
+            TAB_LIB -> "библиотека :: ${libCat ?: "пультов"}${libBrand?.let { " :: $it" } ?: ""}"
             else -> boardSubtitle()
         }
         getPreferences(MODE_PRIVATE).edit().putString(PREF_TAB, tab).apply()
     }
 
     private var tabColor: TextView? = null
+    private lateinit var tabLib: TextView
     private lateinit var tabProj: TextView
     private lateinit var projPanel: View
     private var projIdx = 0
@@ -1317,7 +1325,12 @@ class MainActivity : Activity() {
         if (!::hidStatus.isInitialized) return
         hidStatus.text = hidStatusText(s)
         val on = s != HidLink.State.OFF
-        if (!on && stickyMods != 0) { stickyMods = 0; stickyBtns.forEach { (b, _) -> styleTab(b, false) } }   // донгл всё отпустил сам
+        if (!on && hidAnyHeld()) {   // донгл всё отпустил сам — снимаем подсветку залипших
+            stickyMods = 0; mouseLatch = 0
+            stickyBtns.forEach { (b, _) -> styleTab(b, false) }
+            mouseBtns.forEach { (b, _) -> styleTab(b, false) }
+            heldKeys.forEach { (b, _) -> styleTab(b, false) }; heldKeys.clear()
+        }
         if (!on) ledSentThisLink = false
         if ((s == HidLink.State.READY || s == HidLink.State.USB_OFF) && !ledSentThisLink) {
             ledSentThisLink = true
@@ -1418,16 +1431,32 @@ class MainActivity : Activity() {
         outer.addView(scrPage, LinearLayout.LayoutParams(-1, -2))
         outer.addView(tvPage, LinearLayout.LayoutParams(-1, -2))
         showSub(sub)
+        // переключатель «рисовать»: касание поля сразу зажимает левую кнопку и ведёт
+        drawMode = false
+        lateinit var drawBtn: TextView
+        drawBtn = small("[ ✎ рисовать ]") {
+            drawMode = !drawMode; styleTab(drawBtn, drawMode)
+            say(if (drawMode) "> рисование включено — ведите пальцем по полю" else "> рисование выключено")
+        }
+        p.addView(drawBtn, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(8) })
         // поле-тачпад
         val pad = TouchpadView(this, { hidSens }, {
             hid?.takeIf { it.state == HidLink.State.READY || it.state == HidLink.State.USB_OFF }
                 ?: null.also { if (hid?.state != HidLink.State.SCANNING) say("> донгл не подключён — [ подключить ]", err = true) }
-        })
-        p.addView(pad, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        }, { drawMode })
+        p.addView(pad, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         p.addView(text("один палец — курсор · касание — клик · два пальца — прокрутка и правый клик · удержание — перетащить", 12f, Term.DIM).apply {
             typeface = Term.ru; setPadding(dp(4), dp(4), 0, 0) })
         p.addView(row(48, small("[ Л ]") { hidSend { click(1) } }, small("[ С ]") { hidSend { click(4) } }, small("[ П ]") { hidSend { click(2) } }),
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        // кнопки мыши с залипанием: касание фиксирует, ещё касание отпускает; тащите по полю = перетаскивание
+        mouseBtns.clear()
+        val mL = small("⬇Л") { toggleMouseBtn(1) }.apply { mouseBtns += this to 1 }
+        val mS = small("⬇С") { toggleMouseBtn(4) }.apply { mouseBtns += this to 4 }
+        val mP = small("⬇П") { toggleMouseBtn(2) }.apply { mouseBtns += this to 2 }
+        p.addView(text("кнопки мыши с залипанием (касание — зажать, ещё раз — отпустить; тащите по полю):", 12f, Term.DIM).apply {
+            typeface = Term.ru; setPadding(dp(4), dp(8), 0, 0) })
+        p.addView(row(48, mL, mS, mP), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
         // чувствительность
         val sens = GradientSlider(this, intArrayOf(Term.shade(Term.FG, 0.35f), Term.FG), ((hidSens - 0.3f) / 2.7f).coerceIn(0f, 1f), 0.26f, Term.FG) { v, final ->
             hidSens = 0.3f + 2.7f * v
@@ -1788,32 +1817,64 @@ class MainActivity : Activity() {
 
     private var stickyMods = 0
     private val stickyBtns = ArrayList<Pair<TextView, Int>>()
+    /** Залипшие (зажатые долгим нажатием) быстрые клавиши/сочетания: кнопка + действие снятия подсветки. */
+    private val heldKeys = ArrayList<Pair<TextView, () -> Unit>>()
+    /** Залипшие кнопки мыши (маска) и их кнопки для подсветки. */
+    private var mouseLatch = 0
+    private val mouseBtns = ArrayList<Pair<TextView, Int>>()
+    /** Режим «рисовать»: касание поля сразу зажимает левую кнопку и ведёт. */
+    private var drawMode = false
     private lateinit var combosBox: LinearLayout
     private var combosEdit = false
     private class Combo(var name: String, val mods: Int, val code: Int)
     private var combos = ArrayList<Combo>()
 
-    /** Клавиша, которая держится, пока на ней палец: касание — KEYDOWN, отпустили — KEYUP. */
+    /**
+     * Клавиша: короткое нажатие — нажал-отпустил (KEYDOWN на касание, KEYUP при отпускании);
+     * долгое нажатие (500 мс) — «зажать»: клавиша остаётся нажатой и подсвеченной после отпускания,
+     * повторное касание — отпустить. Несколько клавиш можно держать одновременно (игры: W+A).
+     */
     @android.annotation.SuppressLint("ClickableViewAccessibility")
     private fun holdButton(label: String, mods: Int, code: Int) = mocButton(label) {}.apply {
         typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 12f else 13f)
         isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END
-        var down = false
+        var armed = false     // палец на кнопке, KEYDOWN отправлен
+        var latched = false   // клавиша зафиксирована (держится после отпускания)
+        fun release() { latched = false; armed = false; styleTab(this, false); hid?.keyUp(mods, code); heldKeys.removeAll { it.first === this } }
+        val latchSoon = Runnable { if (armed) { latched = true; performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) } }
         setOnTouchListener { v, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    down = true; styleTab(this, true); glitch(v); v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    if (latched) { release(); return@setOnTouchListener true }   // касание зафиксированной — отпустить
+                    armed = true; styleTab(this, true); glitch(v); v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     hidSend { keyDown(mods, code) }
+                    postDelayed(latchSoon, 500)
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (down) {
-                    down = false; styleTab(this, false)
-                    hid?.keyUp(mods, code)
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (armed) {
+                    removeCallbacks(latchSoon)
+                    if (latched) {
+                        // остаётся зажатой — подсветку не снимаем, запоминаем для «отпустить всё»
+                        armed = false; heldKeys.removeAll { it.first === this }; heldKeys += this to { release() }
+                    } else {
+                        armed = false; styleTab(this, false); hid?.keyUp(mods, code)
+                    }
                     if (e.actionMasked == MotionEvent.ACTION_UP) v.performClick()
                 }
             }
             true
         }
     }
+
+    /** Кнопка мыши с залипанием: касание — зажать (buttons с битом), ещё касание — отпустить. */
+    private fun toggleMouseBtn(bit: Int) {
+        val on = mouseLatch and bit == 0
+        mouseLatch = if (on) mouseLatch or bit else mouseLatch and bit.inv()
+        hidSend { buttons(mouseLatch) }
+        mouseBtns.forEach { (b, m) -> styleTab(b, mouseLatch and m != 0) }
+    }
+
+    /** Есть ли что-то зажатое (модификаторы, клавиши или кнопки мыши). */
+    private fun hidAnyHeld() = stickyMods != 0 || mouseLatch != 0 || heldKeys.isNotEmpty()
 
     private fun toggleSticky(m: Int) {
         val on = stickyMods and m == 0
@@ -1822,11 +1883,15 @@ class MainActivity : Activity() {
         stickyBtns.forEach { (b, bm) -> styleTab(b, stickyMods and bm != 0) }
     }
 
-    /** Отпустить всё на донгле и снять подсветку залипших модификаторов. */
+    /** Отпустить всё на донгле и снять подсветку залипших модификаторов, клавиш и кнопок мыши. */
     private fun hidReleaseAll() {
         hid?.takeIf { it.state == HidLink.State.READY || it.state == HidLink.State.USB_OFF }?.releaseAll()
         stickyMods = 0
         stickyBtns.forEach { (b, _) -> styleTab(b, false) }
+        heldKeys.forEach { (b, _) -> styleTab(b, false) }
+        heldKeys.clear()
+        mouseLatch = 0
+        mouseBtns.forEach { (b, _) -> styleTab(b, false) }
     }
 
     private fun comboLabel(mods: Int, code: Int): String {
@@ -1921,6 +1986,171 @@ class MainActivity : Activity() {
                 if (mods == 0 && code == 0) return@setPositiveButton say("Выберите клавишу или модификатор", err = true)
                 combos += Combo(name.text.toString().trim().ifEmpty { comboLabel(mods, code) }, mods, code); saveCombos()
             }.showThemed()
+    }
+
+    /* ---------- Вкладка «Библиотека»: тысячи ИК-пультов (Flipper-IRDB) ---------- */
+
+    private var libIndex: LinkedHashMap<String, List<String>>? = null
+    private val libBrandCache = HashMap<String, List<Lib.Model>>()
+    private var libCat: String? = null
+    private var libBrand: String? = null
+    private var libModels: List<Lib.Model> = emptyList()
+    private var libModelIdx = 0
+    @Volatile private var libLoading = false
+    private lateinit var libPanel: View
+    private lateinit var libCatBtn: TextView
+    private lateinit var libFilter: android.widget.EditText
+    private lateinit var libInfo: TextView
+    private lateinit var libBody: LinearLayout
+
+    /**
+     * Библиотека: категория → бренд → модель → сетка кнопок. Данные грузятся с сайта и кэшируются
+     * в памяти; файл бренда — по требованию. Нажатие кнопки — отправить ИК через текущий передатчик.
+     */
+    private fun buildLibPanel(): View {
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        libCatBtn = mocButton("[ категория ▾ ]") { libPickCategory() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 14f else 17f) }
+        p.addView(libCatBtn, LinearLayout.LayoutParams(-1, dp(48)))
+        libFilter = android.widget.EditText(this).apply {
+            hint = "поиск бренда…"; setTextColor(Term.FG); setHintTextColor(Term.DIM); typeface = Term.ru
+            background = Term.boxBg(this@MainActivity); setPadding(dp(12), 0, dp(12), 0); setSingleLine()
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun afterTextChanged(e: android.text.Editable?) {}
+                override fun beforeTextChanged(c: CharSequence?, a: Int, b: Int, d: Int) {}
+                override fun onTextChanged(c: CharSequence?, a: Int, b: Int, d: Int) { if (libBrand == null) renderLib() }
+            })
+        }
+        p.addView(libFilter, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(8) })
+        libInfo = text("Загрузка библиотеки…", 13f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(2), dp(8), 0, dp(4)) }
+        p.addView(libInfo)
+        libBody = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        p.addView(libBody, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+        p.addView(text("Пульты из открытой базы Flipper-IRDB. Выберите категорию и бренд — кнопки отправляются через текущий [tx].", 12f, Term.DIM).apply {
+            typeface = Term.ru; setPadding(dp(2), dp(12), 0, 0) })
+        return p
+    }
+
+    /** Загрузить index.json один раз (в фоне), закэшировать в памяти. */
+    private fun loadLibIndex() {
+        if (libIndex != null) { if (::libBody.isInitialized) renderLib(); return }
+        if (libLoading) return
+        libLoading = true
+        if (::libInfo.isInitialized) libInfo.text = "Загрузка библиотеки…"
+        io.execute {
+            val idx = runCatching { Lib.parseIndex(Lib.get(Lib.BASE + "index.json")) }.getOrNull()
+            ui.post {
+                libLoading = false
+                if (idx == null) {
+                    if (::libInfo.isInitialized) libInfo.text = "Не удалось загрузить — проверьте интернет и повторите"
+                    say("Библиотека недоступна", err = true)
+                } else {
+                    libIndex = idx
+                    if (libCat == null) libCat = idx.keys.firstOrNull()
+                    updateLibBtns(); renderLib()
+                    subtitle.text = "библиотека :: ${libCat ?: "пультов"}"
+                }
+            }
+        }
+    }
+
+    private fun updateLibBtns() {
+        if (::libCatBtn.isInitialized) libCatBtn.text = btnLabel("[ ${libCat ?: "категория"} ▾ ]")
+    }
+
+    private fun libPickCategory() {
+        val idx = libIndex ?: return say("Библиотека ещё не загружена", err = true)
+        val cats = idx.keys.toList()
+        AlertDialog.Builder(this).setTitle("Категория")
+            .setItems(cats.toTypedArray()) { _, w ->
+                libCat = cats[w]; libBrand = null; libModels = emptyList(); libModelIdx = 0
+                libFilter.setText(""); updateLibBtns(); renderLib(); subtitle.text = "библиотека :: ${libCat}"
+            }.showThemed()
+    }
+
+    private fun libPickModel() {
+        if (libModels.isEmpty()) return
+        AlertDialog.Builder(this).setTitle(libBrand ?: "Модель")
+            .setItems(libModels.map { it.name }.toTypedArray()) { _, w -> libModelIdx = w.coerceIn(0, libModels.size - 1); renderLib() }
+            .showThemed()
+    }
+
+    /** Загрузить файл бренда (кэш в памяти) и показать его модели. */
+    private fun libOpenBrand(cat: String, brand: String) {
+        val key = "$cat/$brand"
+        libBrandCache[key]?.let { libBrand = brand; libModels = it; libModelIdx = 0; renderLib(); subtitle.text = "библиотека :: $cat :: $brand"; return }
+        libInfo.text = "Загрузка $brand…"
+        io.execute {
+            val models = runCatching {
+                Lib.parseBrand(Lib.get(Lib.BASE + android.net.Uri.encode(cat) + "/" + android.net.Uri.encode(brand) + ".json"))
+            }.getOrNull()
+            ui.post {
+                if (models == null) { say("Не удалось загрузить $brand", err = true); libInfo.text = "$cat :: ошибка загрузки — повторите" }
+                else {
+                    libBrandCache[key] = models; libBrand = brand; libModels = models; libModelIdx = 0
+                    renderLib(); subtitle.text = "библиотека :: $cat :: $brand"
+                }
+            }
+        }
+    }
+
+    private fun renderLib() {
+        if (!::libBody.isInitialized) return
+        libBody.removeAllViews()
+        val idx = libIndex
+        val cat = libCat
+        if (idx == null || cat == null) { libInfo.text = if (libLoading) "Загрузка библиотеки…" else "Нажмите «категория»"; return }
+        fun small(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 13f else 15f) }
+        if (libBrand == null) {
+            libFilter.visibility = View.VISIBLE
+            val q = libFilter.text.toString().trim().lowercase()
+            val brands = (idx[cat] ?: emptyList()).filter { q.isEmpty() || it.lowercase().contains(q) }
+            libInfo.text = "$cat :: ${brands.size} брендов" + if (q.isEmpty()) "" else " (фильтр)"
+            brands.forEach { b ->
+                libBody.addView(small(b) { libOpenBrand(cat, b) }.apply {
+                    gravity = Gravity.CENTER_VERTICAL or Gravity.START; setPadding(dp(14), 0, dp(10), 0)
+                    isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END
+                }, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(6) })
+            }
+        } else {
+            libFilter.visibility = View.GONE
+            val m = libModels.getOrNull(libModelIdx)
+            libInfo.text = "$cat :: $libBrand :: ${m?.buttons?.size ?: 0} кнопок"
+            libBody.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(small("[ ◀ бренды ]") { libBrand = null; libModels = emptyList(); renderLib(); subtitle.text = "библиотека :: $cat" }, LinearLayout.LayoutParams(0, dp(46), 1f))
+                addView(small(btnLabel("[ ${m?.name ?: "модель"} ▾ ]")) { libPickModel() }.apply {
+                    isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END
+                }, LinearLayout.LayoutParams(0, dp(46), 1.6f).apply { leftMargin = dp(6) })
+            }, LinearLayout.LayoutParams(-1, -2))
+            if (m != null && m.buttons.isNotEmpty()) libBody.addView(libButtons(m), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        }
+    }
+
+    private fun libButtons(m: Lib.Model): View {
+        val grid = GridLayout(this).apply { columnCount = 3; useDefaultMargins = false }
+        m.buttons.forEachIndexed { i, b ->
+            val btn = mocButton(b.name) { libSend(b) }.apply {
+                typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 12f else 14f)
+                isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END
+            }
+            grid.addView(btn, GridLayout.LayoutParams(GridLayout.spec(i / 3), GridLayout.spec(i % 3, 1f)).apply {
+                width = 0; height = dp(52); setMargins(dp(3), dp(3), dp(3), dp(3))
+            })
+        }
+        return grid
+    }
+
+    /** Отправить кнопку библиотеки: raw — как есть, parsed — развернуть в тайминги. */
+    private fun libSend(b: Lib.Button) {
+        val tx = current() ?: return say(noTxMessage(), err = true)
+        val pattern: IntArray = when (b) {
+            is Lib.Button.Raw -> b.raw
+            is Lib.Button.Parsed -> Lib.encode(b.protocol, b.a, b.c)?.first
+                ?: return say("Протокол «${b.protocol}» пока не поддерживается", err = true)
+        }
+        if (pattern.isEmpty()) return say("Пустая команда", err = true)
+        say("> tx ${b.name} [sent]")
+        io.execute { try { tx.transmit(pattern) } catch (e: Exception) { ui.post { say(e.message ?: "Ошибка передачи", err = true) } } }
     }
 
     /** Номера пультов коротко: «#1803 +3». */
@@ -2590,6 +2820,7 @@ class MainActivity : Activity() {
         private const val TAB_COLOR = "color"
         private const val TAB_PROJ = "proj"
         private const val TAB_TOUCH = "touch"
+        private const val TAB_LIB = "lib"
         private const val REQ_BT = 38
         private const val FLASH_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/"
         private const val PREF_PROJ = "proj_brand"
