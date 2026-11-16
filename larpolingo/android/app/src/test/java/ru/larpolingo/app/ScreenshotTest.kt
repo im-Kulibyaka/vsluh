@@ -51,6 +51,19 @@ class ScreenshotTest {
         content.dispatchApplyWindowInsets(ins)
         org.robolectric.shadows.ShadowLooper.idleMainLooper(1, java.util.concurrent.TimeUnit.SECONDS)
         save(k.window.decorView, "ime")
+        // виджет в вытянутой и в широкой ячейке: должен оставаться квадратным
+        Streak.setPic(act, Streak.pics[6])
+        for ((name, w, h) in listOf(Triple("tall", 180, 240), Triple("wide", 300, 170))) {
+            val d = act.resources.displayMetrics.density
+            val frame = android.widget.FrameLayout(act)
+            val v = android.view.LayoutInflater.from(act).inflate(R.layout.widget, frame, false)
+            frame.addView(v, android.widget.FrameLayout.LayoutParams((w * d).toInt(), (h * d).toInt()))
+            frame.measure(View.MeasureSpec.makeMeasureSpec((w * d).toInt(), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec((h * d).toInt(), View.MeasureSpec.EXACTLY))
+            frame.layout(0, 0, (w * d).toInt(), (h * d).toInt())
+            frame.setBackgroundColor(0xFF2A4A70.toInt())
+            save(frame, "cell_$name")
+        }
         // все значки огня на тёмном фоне
         val fl = Streak.Flame.entries.filter { it.res != 0 }
         val sheet = Bitmap.createBitmap(fl.size * 150, 150, Bitmap.Config.ARGB_8888)

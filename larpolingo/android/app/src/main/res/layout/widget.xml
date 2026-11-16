@@ -1,21 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@drawable/widget_shape"
-    android:clipToOutline="true">
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/sizer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:adjustViewBounds="true"
+        android:scaleType="fitCenter"
+        android:src="@drawable/square_sizer" />
 
     <ImageView
         android:id="@+id/art"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_alignBottom="@id/sizer"
+        android:layout_alignLeft="@id/sizer"
+        android:layout_alignRight="@id/sizer"
+        android:layout_alignTop="@id/sizer"
+        android:background="@drawable/widget_shape"
+        android:clipToOutline="true"
         android:scaleType="centerCrop"
         android:src="@drawable/art_teal_eyes" />
 
     <LinearLayout
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_alignLeft="@id/sizer"
+        android:layout_alignRight="@id/sizer"
+        android:layout_alignTop="@id/sizer"
         android:gravity="center_horizontal"
         android:orientation="vertical"
         android:paddingTop="14dp">
@@ -67,4 +83,4 @@
             android:textSize="16sp"
             android:visibility="gone" />
     </LinearLayout>
-</FrameLayout>
+</RelativeLayout>

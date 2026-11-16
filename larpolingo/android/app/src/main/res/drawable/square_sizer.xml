@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Прозрачный квадрат: ImageView с adjustViewBounds сжимает его до меньшей стороны виджета,
+     и по нему выравниваются картинка и надписи — так виджет всегда квадратный. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#00000000" />
+    <size android:width="1000dp" android:height="1000dp" />
+</shape>
