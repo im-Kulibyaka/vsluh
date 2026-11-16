@@ -88,6 +88,13 @@ object Streak {
         Pic("d37", R.drawable.art_d37, "Time to practice", c(0xFFBBBBBB), c(0xFFBBBBBB), Flame.TINT, Sub.TEXT, "Time to practice!"),
         Pic("d38", R.drawable.art_d38, "Time to practice", c(0xFFB8E0F5), c(0xFFB8E0F5), Flame.TINT, Sub.TEXT, "Time to practice!"),
         Pic("d39", R.drawable.art_d39, "Time to practice", c(0xFFFFD4FC), c(0xFFFFD4FC), Flame.TINT, Sub.TEXT, "Time to practice!"),
+        // иллюстрации из блога Duolingo (юбилеи стрика, обложки статей)
+        Pic("x_phoenix_gold", R.drawable.art_x_phoenix_gold, "Феникс", c(0xFFFF9600), c(0xFFFF9600), Flame.ON, Sub.TEXT, "day streak!"),
+        Pic("x_phoenix_purple", R.drawable.art_x_phoenix_purple, "Феникс с крыльями", c(0xFFFF9600), c(0xFFCE82FF), Flame.ON, Sub.TEXT, "Congrats!"),
+        Pic("x_balloons", R.drawable.art_x_balloons, "С шариками", c(0xFFFF9600), c(0xFF4B4B4B), Flame.ON, Sub.TEXT, "Day Streak!"),
+        Pic("x_big_flame", R.drawable.art_x_big_flame, "Большой огонь", c(0xFFFF9600), c(0xFFFF9600), Flame.NONE, Sub.TEXT, "day language streak!"),
+        Pic("x_lava", R.drawable.art_x_lava, "Прыжки по лаве", c(0xFFFFF1E0), c(0xFFFFF1E0), Flame.TINT, Sub.TEXT, "Keep it going!"),
+        Pic("x_shocked", R.drawable.art_x_shocked, "В шоке", c(0xFFFFC9D9), c(0xFFFFC9D9), Flame.ALERT, Sub.TEXT, "It's getting late!"),
     )
 
     const val MAX = 999_999_999L
