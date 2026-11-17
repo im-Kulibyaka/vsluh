@@ -32,6 +32,11 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     @Published var heldKeys: Set<UInt16> = []
     /// Залипшие кнопки мыши (1 левая, 2 правая, 4 средняя).
     @Published var mouseMask: UInt8 = 0
+    /// Состояние геймпада (пакет 0x0A): маска 16 кнопок, стики −127..127, hat 0..8.
+    private var gpButtons: UInt16 = 0
+    private var gpLX = 0, gpLY = 0, gpRX = 0, gpRY = 0
+    private var gpHat: UInt8 = 0
+    private var gpLastStick = Date(timeIntervalSince1970: 0)
 
     private var central: CBCentralManager?
     private var peripheral: CBPeripheral?
@@ -334,6 +339,42 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     @discardableResult func keyUp(_ mods: UInt8, _ code: UInt8) -> Bool { send([0x06, mods, code]) }
     /// Медиа/ТВ-клавиша (Consumer, 16-бит usage) — нажать и отпустить.
     @discardableResult func consumer(_ usage: UInt16) -> Bool { send([0x09, UInt8(usage & 0xFF), UInt8((usage >> 8) & 0xFF)]) }
+
+    // MARK: геймпад (пакет 0x0A)
+
+    /// Текущий пакет геймпада [0x0A, btnLo, btnHi, lx, ly, rx, ry, hat].
+    private func gamepadPacket() -> [UInt8] {
+        [0x0A, UInt8(gpButtons & 0xFF), UInt8((gpButtons >> 8) & 0xFF),
+         HidLink.i8(gpLX), HidLink.i8(gpLY), HidLink.i8(gpRX), HidLink.i8(gpRY), gpHat]
+    }
+
+    /// Нажать/отпустить кнопку геймпада по номеру бита — отправить сразу.
+    @discardableResult func gamepadButton(_ bit: Int, _ down: Bool) -> Bool {
+        let mask: UInt16 = UInt16(1) << bit
+        if down { gpButtons |= mask } else { gpButtons &= ~mask }
+        return send(gamepadPacket())
+    }
+
+    /// Установить крестовину (hat 0..8) — отправить сразу.
+    @discardableResult func gamepadHat(_ hat: UInt8) -> Bool {
+        gpHat = hat
+        return send(gamepadPacket())
+    }
+
+    /// Абсолютное положение стиков (−127..127); отправка троттлится ~25 мс (кроме force).
+    @discardableResult func gamepadSticks(lx: Int, ly: Int, rx: Int, ry: Int, force: Bool = false) -> Bool {
+        gpLX = lx; gpLY = ly; gpRX = rx; gpRY = ry
+        let now = Date()
+        if !force && now.timeIntervalSince(gpLastStick) < 0.025 { return ready }
+        gpLastStick = now
+        return send(gamepadPacket())
+    }
+
+    /// Нейтраль геймпада: все кнопки, стики и hat в ноль (уход с подвкладки).
+    @discardableResult func gamepadNeutral() -> Bool {
+        gpButtons = 0; gpLX = 0; gpLY = 0; gpRX = 0; gpRY = 0; gpHat = 0
+        return send(gamepadPacket())
+    }
 
     /// Отпустить всё ([0x06]: клавиши и кнопки мыши) и снять все залипания и подсветку.
     func releaseAll() {
@@ -665,6 +706,10 @@ struct TouchpadPanel: View {
                 HidScriptPanel(model: model)
             } else if sub == 3 {
                 TvPanel(model: model)
+            } else if sub == 4 {
+                GamepadPanel(model: model)
+            } else if sub == 5 {
+                PresenterPanel(model: model)
             } else {
                 touchArea
             }
@@ -678,13 +723,19 @@ struct TouchpadPanel: View {
         .confirmationDialog(comboTitle, isPresented: comboMenuShown, titleVisibility: .visible) { comboActions }
     }
 
-    /// Подвкладки «тачпад» | «светодиод» (выбор запоминается).
+    /// Подвкладки «тачпад» | «светодиод» | … (выбор запоминается). Два ряда чипов.
     private var subTabs: some View {
-        HStack(spacing: 6) {
-            subChip(0, "тачпад")
-            subChip(1, "светодиод")
-            subChip(2, "скрипт")
-            subChip(3, "ТВ")
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                subChip(0, "тачпад")
+                subChip(1, "светодиод")
+                subChip(2, "скрипт")
+            }
+            HStack(spacing: 6) {
+                subChip(3, "ТВ")
+                subChip(4, "геймпад")
+                subChip(5, "презентер")
+            }
         }
     }
 
@@ -2068,6 +2119,537 @@ struct TvPanel: View {
             cButton("[ ⏯ ]", TvPanel.play)
             cButton("[ ⏹ ]", TvPanel.stop)
             cButton("[ ⏭ ]", TvPanel.next)
+        }
+    }
+}
+
+// MARK: - Геймпад
+
+/// Аналоговый стик: шайба тянется за пальцем, на отпускании — в центр.
+/// Сообщает нормализованные x,y (−1..1, y вниз положительный).
+struct AnalogStick: View {
+    let title: String
+    let onChange: (Double, Double) -> Void
+    let onRelease: () -> Void
+    @State private var knob: CGSize = .zero
+
+    var body: some View {
+        GeometryReader { g in
+            let size: CGFloat = min(g.size.width, g.size.height)
+            let maxR: CGFloat = size * 0.35
+            ZStack {
+                Circle().fill(Term.bg.opacity(0.6))
+                    .overlay(Circle().strokeBorder(Term.line, lineWidth: 1))
+                Text(title).font(Term.ru(12)).foregroundColor(Term.dim)
+                    .position(x: size / 2, y: size * 0.14)
+                Circle().fill(Term.fg.opacity(0.85))
+                    .overlay(Circle().strokeBorder(Term.line, lineWidth: 1))
+                    .frame(width: size * 0.34, height: size * 0.34)
+                    .offset(knob)
+            }
+            .frame(width: size, height: size)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Circle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { v in
+                    var dx: CGFloat = v.location.x - size / 2
+                    var dy: CGFloat = v.location.y - size / 2
+                    let len: CGFloat = (dx * dx + dy * dy).squareRoot()
+                    if len > maxR && len > 0 {
+                        dx = dx / len * maxR
+                        dy = dy / len * maxR
+                    }
+                    knob = CGSize(width: dx, height: dy)
+                    onChange(Double(dx / maxR), Double(dy / maxR))
+                }
+                .onEnded { _ in
+                    knob = .zero
+                    onRelease()
+                })
+        }
+        .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+/// Крестовина: палец задаёт одно из 8 направлений (hat), отпускание — центр.
+struct HatPad: View {
+    let onHat: (UInt8) -> Void
+    @State private var dir: UInt8 = 0
+
+    private static let names: [UInt8: String] = [0: "✛", 1: "↑", 2: "↗", 3: "→", 4: "↘", 5: "↓", 6: "↙", 7: "←", 8: "↖"]
+
+    var body: some View {
+        GeometryReader { g in
+            let size: CGFloat = min(g.size.width, g.size.height)
+            ZStack {
+                RoundedRectangle(cornerRadius: 8).fill(Term.bg.opacity(0.6))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(dir == 0 ? Term.line : Term.fg, lineWidth: dir == 0 ? 1 : 2))
+                Text(HatPad.names[dir] ?? "✛").font(Term.ru(30)).foregroundColor(Term.fg)
+            }
+            .frame(width: size, height: size)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { v in
+                    let dx: CGFloat = v.location.x - size / 2
+                    let dy: CGFloat = v.location.y - size / 2
+                    let h: UInt8 = HatPad.hat(dx, dy, dead: size * 0.18)
+                    if h != dir { dir = h; onHat(h) }
+                }
+                .onEnded { _ in
+                    if dir != 0 { dir = 0; onHat(0) }
+                })
+        }
+        .aspectRatio(1, contentMode: .fit)
+    }
+
+    /// 0 центр, 1 вверх, 2 вправо-вверх, 3 вправо, 4 вправо-вниз, 5 вниз, 6 влево-вниз, 7 влево, 8 влево-вверх.
+    private static func hat(_ dx: CGFloat, _ dy: CGFloat, dead: CGFloat) -> UInt8 {
+        if dx * dx + dy * dy < dead * dead { return 0 }
+        var a: Double = atan2(Double(-dy), Double(dx)) * 180 / .pi
+        if a < 0 { a += 360 }
+        let sector: Int = Int((a + 22.5).truncatingRemainder(dividingBy: 360) / 45)
+        let map: [UInt8] = [3, 2, 1, 8, 7, 6, 5, 4]
+        return map[min(max(sector, 0), 7)]
+    }
+}
+
+/// Кнопка геймпада: касание зажимает бит, отпускание отпускает. Турбо — автонажатие ~12 Гц.
+struct GamepadButton: View {
+    let title: String
+    let bit: Int
+    let height: CGFloat
+    let turbo: Bool
+    let haptic: Bool
+    let press: (Int, Bool) -> Void
+    @State private var down = false
+    @State private var timer: Timer?
+
+    var body: some View {
+        TabLabel(title: title, on: down, height: height, ruSize: 15, forceRu: true)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in if !down { begin() } }
+                .onEnded { _ in end() })
+            .onDisappear { end() }
+    }
+
+    private func begin() {
+        down = true
+        if haptic { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+        press(bit, true)
+        if turbo {
+            timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 12.0, repeats: true) { _ in
+                press(bit, false)
+                press(bit, true)
+            }
+        }
+    }
+
+    private func end() {
+        if !down && timer == nil { return }
+        down = false
+        timer?.invalidate()
+        timer = nil
+        press(bit, false)
+    }
+}
+
+/// Подвкладка «геймпад»: два стика, крестовина, лицевые/плечевые/системные кнопки, настройки.
+struct GamepadPanel: View {
+    @ObservedObject var model: RemoteModel
+    @ObservedObject private var link = HidLink.shared
+
+    @AppStorage("gp_dead") private var dead = 12
+    @AppStorage("gp_sens") private var sens = 100
+    @AppStorage("gp_invL") private var invL = false
+    @AppStorage("gp_invR") private var invR = false
+    @AppStorage("gp_swap") private var swap = false
+    @AppStorage("gp_turbo") private var turbo = false
+    @AppStorage("gp_haptic") private var haptic = true
+    @AppStorage("gp_labels") private var labels = 0
+
+    @State private var showSettings = false
+    @State private var lxv = 0
+    @State private var lyv = 0
+    @State private var rxv = 0
+    @State private var ryv = 0
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                sticksRow
+                midRow
+                shoulderRow
+                systemRow
+                settingsSection
+                Text("Нужна прошивка донгла 1.7 (C3 — 1.5).")
+                    .font(Term.ru(12)).foregroundColor(Term.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
+            .padding(.bottom, 16)
+        }
+        .onDisappear { link.gamepadNeutral() }
+    }
+
+    // MARK: стики
+
+    private var sticksRow: some View {
+        HStack(spacing: 10) {
+            AnalogStick(title: "L", onChange: { x, y in
+                let yy: Double = invL ? -y : y
+                lxv = mapAxis(x); lyv = mapAxis(yy); pushSticks()
+            }, onRelease: { lxv = 0; lyv = 0; pushSticks(force: true) })
+            AnalogStick(title: "R", onChange: { x, y in
+                let yy: Double = invR ? -y : y
+                rxv = mapAxis(x); ryv = mapAxis(yy); pushSticks()
+            }, onRelease: { rxv = 0; ryv = 0; pushSticks(force: true) })
+        }
+        .frame(height: 170)
+    }
+
+    private func pushSticks(force: Bool = false) {
+        let lx: Int = swap ? rxv : lxv
+        let ly: Int = swap ? ryv : lyv
+        let rx: Int = swap ? lxv : rxv
+        let ry: Int = swap ? lyv : ryv
+        run(link.gamepadSticks(lx: lx, ly: ly, rx: rx, ry: ry, force: force))
+    }
+
+    /// Нормаль −1..1 → int8 с учётом мёртвой зоны и чувствительности.
+    private func mapAxis(_ v: Double) -> Int {
+        let dz: Double = Double(dead) / 100.0
+        let a: Double = abs(v)
+        if a <= dz { return 0 }
+        let norm: Double = dz < 1 ? (a - dz) / (1 - dz) : a
+        let scaled: Double = min(1.0, norm * Double(sens) / 100.0)
+        let out: Int = Int((scaled * 127).rounded())
+        return v < 0 ? -out : out
+    }
+
+    // MARK: крестовина + лицевые кнопки
+
+    private var midRow: some View {
+        HStack(alignment: .center, spacing: 10) {
+            HatPad(onHat: { h in run(link.gamepadHat(h)) })
+            faceDiamond
+        }
+        .frame(height: 180)
+    }
+
+    private var faceDiamond: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Spacer(minLength: 0)
+                faceButton("Y", 3).frame(width: 64)
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 6) {
+                faceButton("X", 2).frame(width: 64)
+                Spacer(minLength: 0)
+                faceButton("B", 1).frame(width: 64)
+            }
+            HStack(spacing: 6) {
+                Spacer(minLength: 0)
+                faceButton("A", 0).frame(width: 64)
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func faceButton(_ name: String, _ bit: Int) -> some View {
+        GamepadButton(title: faceLabel(name), bit: bit, height: 54, turbo: turbo, haptic: haptic, press: pressBit)
+    }
+
+    /// Подписи лицевых кнопок: Xbox | PlayStation | цифры.
+    private func faceLabel(_ name: String) -> String {
+        switch labels {
+        case 1: return ["A": "✕", "B": "○", "X": "□", "Y": "△"][name] ?? name
+        case 2: return ["A": "1", "B": "2", "X": "3", "Y": "4"][name] ?? name
+        default: return name
+        }
+    }
+
+    // MARK: плечевые и системные
+
+    private var shoulderRow: some View {
+        HStack(spacing: 6) {
+            sysButton("L2", 6)
+            sysButton("L1", 4)
+            sysButton("R1", 5)
+            sysButton("R2", 7)
+        }
+    }
+
+    private var systemRow: some View {
+        HStack(spacing: 6) {
+            sysButton("L3", 10)
+            sysButton("Select", 8)
+            sysButton("Start", 9)
+            sysButton("R3", 11)
+        }
+    }
+
+    private func sysButton(_ title: String, _ bit: Int) -> some View {
+        GamepadButton(title: title, bit: bit, height: 48, turbo: false, haptic: haptic, press: pressBit)
+    }
+
+    private func pressBit(_ bit: Int, _ down: Bool) {
+        run(link.gamepadButton(bit, down))
+    }
+
+    // MARK: настройки
+
+    private var settingsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button { showSettings.toggle() } label: {
+                TabLabel(title: showSettings ? "⚙ настройки ▴" : "⚙ настройки ▾", on: showSettings, height: 40, ruSize: 13, forceRu: true)
+            }
+            if showSettings {
+                deadSlider
+                sensSlider
+                toggleRow
+                turboRow
+                labelsRow
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private var deadSlider: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("мёртвая зона: " + String(dead) + "%").font(Term.ru(13)).foregroundColor(Term.dim)
+            TrackSlider(value: Double(dead) / 30.0, mark: 12.0 / 30.0, markColor: Term.fg, track: [Term.bg, Term.fg],
+                        leftText: "0%", rightText: "30%",
+                        onDrag: { v in dead = Int((v * 30).rounded()) },
+                        onDone: { v in dead = Int((v * 30).rounded()) })
+        }
+    }
+
+    private var sensSlider: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("чувствительность: " + String(sens) + "%").font(Term.ru(13)).foregroundColor(Term.dim)
+            TrackSlider(value: Double(sens - 50) / 100.0, mark: 0.5, markColor: Term.fg, track: [Term.bg, Term.fg],
+                        leftText: "50%", rightText: "150%",
+                        onDrag: { v in sens = 50 + Int((v * 100).rounded()) },
+                        onDone: { v in sens = 50 + Int((v * 100).rounded()) })
+        }
+    }
+
+    private var toggleRow: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                toggle("инв. Y лев.", invL) { invL.toggle() }
+                toggle("инв. Y прав.", invR) { invR.toggle() }
+            }
+            HStack(spacing: 6) {
+                toggle("поменять стики", swap) { swap.toggle() }
+                toggle("вибро", haptic) { haptic.toggle() }
+            }
+        }
+    }
+
+    private var turboRow: some View {
+        HStack(spacing: 6) {
+            toggle("турбо (автонажатие)", turbo) { turbo.toggle() }
+        }
+    }
+
+    private var labelsRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("подписи кнопок").font(Term.ru(13)).foregroundColor(Term.dim)
+            HStack(spacing: 6) {
+                labelChip("Xbox", 0)
+                labelChip("PlayStation", 1)
+                labelChip("1·2·3·4", 2)
+            }
+        }
+    }
+
+    private func labelChip(_ title: String, _ i: Int) -> some View {
+        Button { labels = i } label: {
+            TabLabel(title: title, on: labels == i, height: 38, ruSize: 12, forceRu: true)
+        }
+    }
+
+    private func toggle(_ title: String, _ on: Bool, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            TabLabel(title: (on ? "✓ " : "  ") + title, on: on, height: 40, ruSize: 12, forceRu: true)
+        }
+    }
+
+    private func run(_ ok: Bool) {
+        if !ok {
+            let msg: String = "> донгл не подключён — [ подключить ]"
+            if model.status != msg { model.say(msg) }
+        }
+    }
+}
+
+// MARK: - Презентер
+
+/// Подвкладка «презентер»: клавиши слайдов, таймер и указка. Прошивка не нужна.
+struct PresenterPanel: View {
+    @ObservedObject var model: RemoteModel
+    @ObservedObject private var link = HidLink.shared
+
+    /// Набор клавиш: 0 стрелки, 1 PageUp/Dn, 2 пробел/⌫.
+    @AppStorage("pres_keys") private var keys = 0
+
+    @State private var seconds = 0
+    @State private var running = false
+    @State private var timer: Timer?
+
+    /// Коды «назад»/«вперёд» для выбранного набора.
+    private var backCode: UInt8 { [0x50, 0x4B, 0x2A][min(max(keys, 0), 2)] }
+    private var fwdCode: UInt8 { [0x4F, 0x4E, 0x2C][min(max(keys, 0), 2)] }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                navRow
+                keySetRow
+                showRow
+                blankRow
+                timerBlock
+                pointerBlock
+                Text("Работает в PowerPoint, Keynote, Google Презентациях, PDF.")
+                    .font(Term.ru(12)).foregroundColor(Term.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
+            .padding(.bottom, 16)
+        }
+        .onDisappear { stopTimer() }
+    }
+
+    private var navRow: some View {
+        HStack(spacing: 6) {
+            button("◀ назад", height: 72) { run(link.key(0, backCode)) }
+            button("вперёд ▶", height: 72) { run(link.key(0, fwdCode)) }
+        }
+    }
+
+    private var keySetRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("клавиши перелистывания").font(Term.ru(13)).foregroundColor(Term.dim)
+            HStack(spacing: 6) {
+                keyChip("стрелки", 0)
+                keyChip("PageUp/Dn", 1)
+                keyChip("пробел/⌫", 2)
+            }
+        }
+    }
+
+    private func keyChip(_ title: String, _ i: Int) -> some View {
+        Button { keys = i } label: {
+            TabLabel(title: title, on: keys == i, height: 38, ruSize: 12, forceRu: true)
+        }
+    }
+
+    private var showRow: some View {
+        HStack(spacing: 6) {
+            button("▶ с начала", height: 48) { run(link.key(0, 0x3E)) }
+            button("▶ с текущего", height: 48) { run(link.key(0x02, 0x3E)) }
+            button("⤬ выход", height: 48) { run(link.key(0, 0x29)) }
+        }
+    }
+
+    private var blankRow: some View {
+        HStack(spacing: 6) {
+            button("⬛ чёрный", height: 48) { run(link.key(0, 0x05)) }
+            button("⬜ белый", height: 48) { run(link.key(0, 0x1A)) }
+        }
+    }
+
+    // MARK: таймер выступления
+
+    private var timerBlock: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("таймер выступления").font(Term.ru(13)).foregroundColor(Term.dim).padding(.top, 4)
+            Text(clock).font(Term.mono(40)).foregroundColor(Term.fg)
+                .frame(maxWidth: .infinity, alignment: .center)
+            HStack(spacing: 6) {
+                button(running ? "❚❚ пауза" : "▶ старт", on: running, height: 46) { toggleTimer() }
+                button("↺ сброс", height: 46) { resetTimer() }
+            }
+        }
+    }
+
+    private var clock: String {
+        String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+
+    private func toggleTimer() {
+        if running { stopTimer() } else { startTimer() }
+    }
+
+    private func startTimer() {
+        running = true
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in seconds += 1 }
+    }
+
+    private func stopTimer() {
+        running = false
+        timer?.invalidate()
+        timer = nil
+    }
+
+    private func resetTimer() {
+        stopTimer()
+        seconds = 0
+    }
+
+    // MARK: указка (тачпад)
+
+    private var pointerBlock: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("указка").font(Term.ru(13)).foregroundColor(Term.dim)
+            GeometryReader { g in
+                ZStack {
+                    Canvas { ctx, size in PresenterPanel.dots(ctx, size) }
+                    TouchSurface(sens: 1.5,
+                                 onMove: { dx, dy in run(link.move(dx, dy)) },
+                                 onWheel: { _ in },
+                                 onClick: { m in run(link.click(m)) },
+                                 onButtons: { _ in })
+                }
+                .frame(width: g.size.width, height: g.size.width * 0.5)
+                .background(Term.bg.opacity(0.6))
+                .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+            }
+            .aspectRatio(1 / 0.5, contentMode: .fit)
+        }
+    }
+
+    private static func dots(_ ctx: GraphicsContext, _ size: CGSize) {
+        let step: CGFloat = 18
+        var p = Path()
+        var y: CGFloat = step / 2
+        while y < size.height {
+            var x: CGFloat = step / 2
+            while x < size.width {
+                p.addEllipse(in: CGRect(x: x - 1, y: y - 1, width: 2, height: 2))
+                x += step
+            }
+            y += step
+        }
+        ctx.fill(p, with: .color(Term.line.opacity(0.7)))
+    }
+
+    private func button(_ title: String, on: Bool = false, height: CGFloat, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            TabLabel(title: title, on: on, height: height, ruSize: 15, forceRu: true)
+        }
+    }
+
+    private func run(_ ok: Bool) {
+        if !ok {
+            let msg: String = "> донгл не подключён — [ подключить ]"
+            if model.status != msg { model.say(msg) }
         }
     }
 }

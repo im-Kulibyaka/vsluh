@@ -313,6 +313,33 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
     fun consumer(usage: Int) = send(byteArrayOf(0x09, (usage and 0xFF).toByte(), ((usage shr 8) and 0xFF).toByte()))
     fun runStored() = send(byteArrayOf(0x23))
     fun clearScript() = send(byteArrayOf(0x24))
+
+    /* ---------- игровой пульт (0x0A) ---------- */
+    private var pBtn = 0; private var pHat = 0
+    private var pLx = 0; private var pLy = 0; private var pRx = 0; private var pRy = 0
+    private var padLast = 0L
+    private val padFlusher = Runnable { padSend() }
+
+    /** Игровой пульт: 16 кнопок (маска), стики −127..127, hat 0 центр/1 вверх…8 влево-вверх. Прошивка 1.7 (C3 1.5).
+     *  Нажатия кнопок и hat шлём сразу, движение стиков — не чаще раза в 25 мс (чтобы не забить канал). */
+    fun gamepad(buttons: Int, lx: Int, ly: Int, rx: Int, ry: Int, hat: Int) {
+        val now = buttons != pBtn || hat != pHat
+        pBtn = buttons; pHat = hat; pLx = lx; pLy = ly; pRx = rx; pRy = ry
+        ui.removeCallbacks(padFlusher)
+        if (now) padSend()
+        else {
+            val wait = 25 - (SystemClock.uptimeMillis() - padLast)
+            if (wait <= 0) padSend() else ui.postDelayed(padFlusher, wait)
+        }
+    }
+    private fun padSend() {
+        padLast = SystemClock.uptimeMillis()
+        send(byteArrayOf(0x0A, (pBtn and 0xFF).toByte(), ((pBtn shr 8) and 0xFF).toByte(),
+            pLx.coerceIn(-127, 127).toByte(), pLy.coerceIn(-127, 127).toByte(),
+            pRx.coerceIn(-127, 127).toByte(), pRy.coerceIn(-127, 127).toByte(), (pHat and 0xFF).toByte()))
+    }
+    /** Вернуть пульт в нейтраль (всё отпущено). */
+    fun gamepadNeutral() { ui.removeCallbacks(padFlusher); pBtn = 0; pHat = 0; pLx = 0; pLy = 0; pRx = 0; pRy = 0; padSend() }
     fun text(t: String): Boolean { var ok = true; chunks(t).forEach { ok = send(byteArrayOf(0x07) + it) && ok }; return ok }
 }
 

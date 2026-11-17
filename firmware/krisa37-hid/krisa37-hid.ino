@@ -16,6 +16,9 @@
  *   0x07 TEXT    [0x07, UTF-8...]        — латиница по раскладке US, кириллица — клавиши ЙЦУКЕН
  *   0x08 LED     [0x08, mode, r, g, b, bright] — светодиод: 0 авто (статус), 1 цвет, 2 дыхание, 3 радуга, 4 выкл;
  *                запоминается в памяти платы. В INFO — «led=rgb».
+ *   0x09 CONSUMER[0x09, lo, hi]              — медиа-клавиша ТВ/телефона (16-битный Consumer usage)
+ *   0x0A GAMEPAD [0x0A, btnLo, btnHi, lx, ly, rx, ry, hat] — игровой пульт: 16 кнопок (маска),
+ *                2 стика (int8 −127..127), hat 0 центр / 1 вверх … 8 влево-вверх. Доска видит USB-геймпад.
  *   Скрипт (Ducky/макрос): 0x20 начать приём, 0x21 <байткод…> дописать, 0x22 <auto 0|1> сохранить в память,
  *                0x23 выполнить сохранённый сейчас, 0x24 стереть. Байткод: 01 len текст | 02 mods key нажать |
  *                03 lo hi пауза мс | 04 dx dy мышь | 05 mask count клик | 08 wheel колесо. В INFO — «scr=1» если сохранён.
@@ -33,6 +36,7 @@
 #include "USBHIDKeyboard.h"
 #include "USBHIDMouse.h"
 #include "USBHIDConsumerControl.h"
+#include "USBHIDGamepad.h"
 #endif
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
@@ -43,7 +47,7 @@
 #include <Preferences.h>
 #include "types.h"
 
-#define VERSION "1.6"
+#define VERSION "1.7"
 #define SERVICE_UUID "6b7e0001-3a1f-4c7e-9d2a-6b72697361a0"
 #define RX_UUID      "6b7e0002-3a1f-4c7e-9d2a-6b72697361a0"
 #define INFO_UUID    "6b7e0003-3a1f-4c7e-9d2a-6b72697361a0"
@@ -54,6 +58,7 @@
 USBHIDKeyboard Keyboard;
 USBHIDMouse Mouse;
 USBHIDConsumerControl Consumer;   // медиа-клавиши для ТВ/телефона
+USBHIDGamepad Gamepad;            // игровой пульт (стики, кнопки, hat)
 #define LOG(...) Serial0.printf(__VA_ARGS__)    // журнал в UART0: на платах с разъёмом COM его видно в консоли
 #else
 /* Диагностика: вместо USB-клавиатуры и мыши — строки в журнал. */
@@ -67,6 +72,7 @@ struct DiagKeyboard {
   void sendReport(KeyReport *r) { if (r->keys[0] || r->modifiers) LOG("key mods=%02x code=%02x\n", r->modifiers, r->keys[0]); }
 } Keyboard;
 struct DiagConsumer { void begin() {} void press(uint16_t u) { LOG("consumer %04x\n", u); } void release() {} } Consumer;
+struct DiagGamepad { void begin() {} size_t send(int8_t x, int8_t y, int8_t z, int8_t rz, int8_t rx, int8_t ry, uint8_t hat, uint32_t btn) { LOG("pad %d %d %d %d hat %u btn %04x\n", x, y, z, rz, hat, (unsigned)btn); return 0; } } Gamepad;
 struct DiagMouse {
   uint8_t b = 0;
   void begin() {}
@@ -258,6 +264,7 @@ void releaseAll() {
   memset(heldKeys, 0, sizeof(heldKeys));
   sendHeld();
   for (uint8_t b : {MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE}) if (Mouse.isPressed(b)) Mouse.release(b);
+  Gamepad.send(0, 0, 0, 0, 0, 0, 0, 0);          // геймпад — в нейтраль
 }
 
 /* UTF-8 может разрезаться между пакетами — держим незаконченный символ здесь. */
@@ -362,6 +369,12 @@ void handle(const Packet &p) {
     case 0x09:                                   // ТВ/телефон: медиа-клавиша (16-битный Consumer usage)
       if (p.len >= 3) { uint16_t u = p.data[1] | (p.data[2] << 8); Consumer.press(u); delay(60); Consumer.release(); }
       break;
+    case 0x0A:                                   // игровой пульт: кнопки + стики + hat
+      if (p.len >= 8) {
+        uint32_t btn = p.data[1] | (p.data[2] << 8);
+        Gamepad.send((int8_t)p.data[3], (int8_t)p.data[4], (int8_t)p.data[5], (int8_t)p.data[6], 0, 0, p.data[7], btn);
+      }
+      break;
     case 0x20: scriptRecv = 0; break;
     case 0x21: { size_t c = p.len - 1; if (scriptRecv + c <= SCRIPT_MAX) { memcpy(scriptBuf + scriptRecv, p.data + 1, c); scriptRecv += c; } break; }
     case 0x22: scriptAuto = p.len >= 2 && p.data[1]; scriptSave(); publishInfo(); break;
@@ -405,6 +418,7 @@ void setup() {
   Keyboard.begin();
   Mouse.begin();
   Consumer.begin();
+  Gamepad.begin();
   USB.begin();
 #endif
   LOG("usb ok\n");

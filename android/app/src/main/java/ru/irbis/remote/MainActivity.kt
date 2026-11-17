@@ -1413,23 +1413,32 @@ class MainActivity : Activity() {
             addView(hidStatus, LinearLayout.LayoutParams(0, dp(48), 1.2f))
             addView(hidBtn, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(6) })
         })
-        // подвкладки «тачпад» | «светодиод» | «скрипт»
+        // подвкладки: тачпад | светодиод | скрипт | ТВ | геймпад | презентер (два ряда)
         val ledPage = buildLedPage()
         val scrPage = buildScriptHidPage()
         val tvPage = buildTvPage()
-        val sub = prefs.getInt("touch_sub", 0).coerceIn(0, 3)
+        val padPage = buildGamepadPage()
+        val presPage = buildPresenterPage()
+        val subPages = listOf(p, ledPage, scrPage, tvPage, padPage, presPage)
+        val sub = prefs.getInt("touch_sub", 0).coerceIn(0, subPages.size - 1)
+        val subViews = ArrayList<TextView>()
         fun showSub(i: Int) {
-            p.visibility = if (i == 0) View.VISIBLE else View.GONE
-            ledPage.visibility = if (i == 1) View.VISIBLE else View.GONE
-            scrPage.visibility = if (i == 2) View.VISIBLE else View.GONE
-            tvPage.visibility = if (i == 3) View.VISIBLE else View.GONE
+            subViews.forEachIndexed { k, v -> styleTab(v, k == i) }
+            subPages.forEachIndexed { k, v -> v.visibility = if (k == i) View.VISIBLE else View.GONE }
+            if (i != 4) hid?.gamepadNeutral()          // ушли с геймпада — всё отпустить
         }
-        outer.addView(chipRow(listOf("тачпад", "светодиод", "скрипт", "ТВ"), sub) { i, _ -> showSub(i); prefs.edit().putInt("touch_sub", i).apply() },
-            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
-        outer.addView(p, LinearLayout.LayoutParams(-1, -2))
-        outer.addView(ledPage, LinearLayout.LayoutParams(-1, -2))
-        outer.addView(scrPage, LinearLayout.LayoutParams(-1, -2))
-        outer.addView(tvPage, LinearLayout.LayoutParams(-1, -2))
+        val subLabels = listOf("тачпад", "светодиод", "скрипт", "ТВ", "геймпад", "презентер")
+        subLabels.forEachIndexed { i, l ->
+            subViews += tabButton(l) { showSub(i); prefs.edit().putInt("touch_sub", i).apply() }
+                .apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 11.5f else 14f) }
+        }
+        for (rowList in listOf(subViews.subList(0, 3), subViews.subList(3, 6))) {
+            outer.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false
+                rowList.forEachIndexed { i, v -> addView(v, LinearLayout.LayoutParams(0, dp(36), 1f).apply { if (i > 0) leftMargin = dp(6) }) }
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        }
+        subPages.forEach { outer.addView(it, LinearLayout.LayoutParams(-1, -2)) }
         showSub(sub)
         // переключатель «рисовать»: касание поля сразу зажимает левую кнопку и ведёт
         drawMode = false
@@ -1545,6 +1554,214 @@ class MainActivity : Activity() {
         p.addView(row(50, btn("⏮") { tvC(0x00B6) }, btn("⏯") { tvC(0x00CD) }, btn("⏹") { tvC(0x00B7) }, btn("⏭") { tvC(0x00B5) }),
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         p.addView(text("Медиа-клавиши работают на ТВ, телефоне или ПК, подключённом к донглу. Нужна прошивка донгла 1.6 (ESP32-C3 — 1.4).", 12f, Term.DIM).apply {
+            typeface = Term.ru; setPadding(dp(4), dp(12), 0, 0) })
+        return p
+    }
+
+    /* ---------- «Тачпад» → «геймпад»: USB/BLE-геймпад с настройками ---------- */
+
+    private var padWarnedAt = 0L
+    private fun buildGamepadPage(): View {
+        val prefs = getPreferences(MODE_PRIVATE)
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun row(h: Int, vararg v: View) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false
+            v.forEachIndexed { i, x -> addView(x, LinearLayout.LayoutParams(0, dp(h), 1f).apply { if (i > 0) leftMargin = dp(6) }) }
+        }
+
+        // настройки
+        var dead = prefs.getInt("gp_dead", 12)
+        var sens = prefs.getInt("gp_sens", 100)
+        var invL = prefs.getBoolean("gp_invL", false)
+        var invR = prefs.getBoolean("gp_invR", false)
+        var swap = prefs.getBoolean("gp_swap", false)
+        var turbo = prefs.getBoolean("gp_turbo", false)
+        var haptic = prefs.getBoolean("gp_haptic", true)
+        var labels = prefs.getInt("gp_labels", 0).coerceIn(0, 2)
+
+        // состояние
+        var lxR = 0f; var lyR = 0f; var rxR = 0f; var ryR = 0f; var hat = 0
+        val held = java.util.HashSet<Int>()
+        var turboPhase = true; var turboRunning = false
+        val FACE = setOf(0, 1, 2, 3)
+
+        fun axis(v: Float): Int {
+            val dz = dead / 100f
+            val a = kotlin.math.abs(v)
+            if (a <= dz) return 0
+            val n = Math.min((a - dz) / (1f - dz) * (sens / 100f), 1f)
+            return Math.round(n * 127) * (if (v < 0) -1 else 1)
+        }
+        fun push() {
+            var lx = axis(lxR); var ly = axis(lyR) * (if (invL) -1 else 1)
+            var rx = axis(rxR); var ry = axis(ryR) * (if (invR) -1 else 1)
+            if (swap) { val tx = lx; val ty = ly; lx = rx; ly = ry; rx = tx; ry = ty }
+            var bits = 0
+            for (b in held) if (!(turbo && b in FACE) || turboPhase) bits = bits or (1 shl b)
+            hid?.gamepad(bits, lx, ly, rx, ry, hat)
+        }
+        val turboTick = object : Runnable {
+            override fun run() {
+                if (turbo && held.any { it in FACE }) { turboPhase = !turboPhase; push(); ui.postDelayed(this, 45); turboRunning = true }
+                else { turboRunning = false; turboPhase = true; push() }
+            }
+        }
+        fun maybeTurbo() { if (turbo && held.any { it in FACE } && !turboRunning) { turboRunning = true; ui.post(turboTick) } }
+        fun warnIfOff() {
+            val st = hid?.state
+            if ((st != HidLink.State.READY && st != HidLink.State.USB_OFF) && System.currentTimeMillis() - padWarnedAt > 3000) {
+                padWarnedAt = System.currentTimeMillis(); say("> донгл не подключён — [ подключить ]", err = true)
+            }
+        }
+
+        // кнопка (бит): касание — зажать, отпускание — отпустить
+        fun hold(bit: Int, label: String): TextView = mocButton(label) {}.apply {
+            typeface = Term.mono; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 16f else 19f)
+            setOnTouchListener { v, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> { held.add(bit); styleTab(this, true); warnIfOff(); if (haptic) v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); push(); maybeTurbo(); true }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { held.remove(bit); styleTab(this, false); push(); true }
+                    else -> false
+                }
+            }
+        }
+
+        // плечевые
+        p.addView(row(44, hold(6, "L2"), hold(4, "L1"), hold(5, "R1"), hold(7, "R2")),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        // стики
+        val left = JoystickView(this) { x, y -> lxR = x; lyR = y; push() }
+        val right = JoystickView(this) { x, y -> rxR = x; ryR = y; push() }
+        p.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false
+            addView(left, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(right, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(6) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        p.addView(row(20, text("левый стик", 11f, Term.DIM).apply { typeface = Term.ru; gravity = Gravity.CENTER },
+            text("правый стик", 11f, Term.DIM).apply { typeface = Term.ru; gravity = Gravity.CENTER }))
+        // крестовина и лицевые кнопки (ромб)
+        val dpad = DpadView(this) { h -> hat = h; warnIfOff(); push() }
+        val faceY = hold(3, ""); val faceX = hold(2, ""); val faceB = hold(1, ""); val faceA = hold(0, "")
+        fun relabel() {
+            val set = when (labels) { 1 -> listOf("✕", "○", "□", "△"); 2 -> listOf("1", "2", "3", "4"); else -> listOf("A", "B", "X", "Y") }
+            faceA.text = set[0]; faceB.text = set[1]; faceX.text = set[2]; faceY.text = set[3]
+        }
+        relabel()
+        val diamond = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(row(50, View(this@MainActivity), faceY, View(this@MainActivity)))
+            addView(row(50, faceX, View(this@MainActivity), faceB), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+            addView(row(50, View(this@MainActivity), faceA, View(this@MainActivity)), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        }
+        p.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false
+            addView(dpad, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(diamond, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(6); gravity = Gravity.CENTER_VERTICAL })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        // системные
+        p.addView(row(42, hold(10, "L3"), hold(8, "Select"), hold(9, "Start"), hold(11, "R3")),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+
+        // ⚙ настройки (сворачиваемые)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+        lateinit var gear: TextView
+        gear = mocButton("[ ⚙ настройки ▾ ]") {
+            box.visibility = if (box.visibility == View.GONE) View.VISIBLE else View.GONE
+            gear.text = btnLabel(if (box.visibility == View.VISIBLE) "[ ⚙ настройки ▴ ]" else "[ ⚙ настройки ▾ ]")
+        }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 13f else 15f) }
+        p.addView(gear, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(12) })
+
+        val deadS = GradientSlider(this, intArrayOf(Term.shade(Term.FG, 0.35f), Term.FG), dead / 30f, 0.26f, Term.FG) { v, final ->
+            dead = Math.round(v * 30); if (final) prefs.edit().putInt("gp_dead", dead).apply()
+        }
+        box.addView(text("мёртвая зона стиков", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(8), 0, dp(2)) })
+        box.addView(sliderBox(deadS, "нет", "больше"), LinearLayout.LayoutParams(-1, -2))
+        val sensS = GradientSlider(this, intArrayOf(Term.shade(Term.FG, 0.35f), Term.FG), (sens - 50) / 100f, 0.26f, Term.FG) { v, final ->
+            sens = 50 + Math.round(v * 100); if (final) prefs.edit().putInt("gp_sens", sens).apply()
+        }
+        box.addView(text("чувствительность стиков", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(10), 0, dp(2)) })
+        box.addView(sliderBox(sensS, "меньше", "больше"), LinearLayout.LayoutParams(-1, -2))
+        // переключатели
+        fun toggle(label: String, init: Boolean, set: (Boolean) -> Unit): TextView {
+            lateinit var t: TextView
+            t = mocButton(label) { val nv = !(t.tag as? Boolean ?: init); t.tag = nv; styleTab(t, nv); set(nv) }
+                .apply { tag = init; styleTab(this, init); typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 12f else 13f) }
+            return t
+        }
+        box.addView(row(42,
+            toggle("инв. L", invL) { invL = it; prefs.edit().putBoolean("gp_invL", it).apply() },
+            toggle("инв. R", invR) { invR = it; prefs.edit().putBoolean("gp_invR", it).apply() },
+            toggle("↔ стики", swap) { swap = it; prefs.edit().putBoolean("gp_swap", it).apply() }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        box.addView(row(42,
+            toggle("турбо", turbo) { turbo = it; prefs.edit().putBoolean("gp_turbo", it).apply(); turboPhase = true; if (it) maybeTurbo() else push() },
+            toggle("вибро", haptic) { haptic = it; prefs.edit().putBoolean("gp_haptic", it).apply() }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        box.addView(text("подписи кнопок", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(10), 0, dp(2)) })
+        box.addView(chipRow(listOf("Xbox", "PlayStation", "1·2·3·4"), labels) { i, _ ->
+            labels = i; prefs.edit().putInt("gp_labels", i).apply(); relabel()
+        }, LinearLayout.LayoutParams(-1, -2))
+        p.addView(box, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+
+        p.addView(text("Доска/ПК/телефон увидят донгл как игровой пульт (USB — ESP32-S3, Bluetooth — ESP32-C3/S3-BT). Нужна прошивка 1.7 (C3 — 1.5).", 12f, Term.DIM).apply {
+            typeface = Term.ru; setPadding(dp(4), dp(12), 0, 0) })
+        return p
+    }
+
+    /* ---------- «Тачпад» → «презентер»: пульт докладчика (клавиши слайдов) ---------- */
+
+    private fun buildPresenterPage(): View {
+        val prefs = getPreferences(MODE_PRIVATE)
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun big(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 17f else 22f) }
+        fun btn(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 14f else 16f) }
+        fun row(h: Int, vararg v: View) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false
+            v.forEachIndexed { i, x -> addView(x, LinearLayout.LayoutParams(0, dp(h), 1f).apply { if (i > 0) leftMargin = dp(6) }) }
+        }
+        // набор клавиш «назад/вперёд»: стрелки | PageUp/Dn | пробел/⌫
+        var mode = prefs.getInt("pres_keys", 0).coerceIn(0, 2)
+        val sets = listOf(Pair(0x50, 0x4F), Pair(0x4B, 0x4E), Pair(0x2A, 0x2C))   // (назад, вперёд)
+        fun prevKey() = sets[mode].first
+        fun nextKey() = sets[mode].second
+
+        // большие назад/вперёд
+        p.addView(row(90,
+            big("◀ назад") { hidSend { key(0, prevKey()) } },
+            big("вперёд ▶") { hidSend { key(0, nextKey()) } }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        p.addView(chipRow(listOf("стрелки", "PageUp/Dn", "пробел/⌫"), mode) { i, _ -> mode = i; prefs.edit().putInt("pres_keys", i).apply() },
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        // управление показом
+        p.addView(row(50, btn("▶ с начала") { hidSend { key(0, 0x3E) } }, btn("▶ с текущего") { hidSend { key(HidLink.SHIFT, 0x3E) } }, btn("⤬ выход") { hidSend { key(0, 0x29) } }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        p.addView(row(50, btn("⬛ чёрный") { hidSend { key(0, 0x05) } }, btn("⬜ белый") { hidSend { key(0, 0x1A) } }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+
+        // таймер выступления (только в телефоне)
+        val timeLbl = text("00:00", 34f, Term.FG).apply { typeface = Term.mono; gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(4)) }
+        var running = false; var base = 0L; var acc = 0L
+        fun fmt(ms: Long): String { val s = ms / 1000; return "%02d:%02d".format(s / 60, s % 60) }
+        val tick = object : Runnable {
+            override fun run() { if (running) { timeLbl.text = fmt(acc + (System.currentTimeMillis() - base)); ui.postDelayed(this, 500) } }
+        }
+        lateinit var startBtn: TextView
+        startBtn = btn("▷ старт") {
+            if (running) { acc += System.currentTimeMillis() - base; running = false; startBtn.text = btnLabel("▷ старт") }
+            else { base = System.currentTimeMillis(); running = true; startBtn.text = btnLabel("⏸ пауза"); ui.post(tick) }
+        }
+        val resetBtn = btn("⟲ сброс") { running = false; acc = 0; timeLbl.text = "00:00"; startBtn.text = btnLabel("▷ старт") }
+        p.addView(text("таймер выступления", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(14), 0, 0) })
+        p.addView(timeLbl)
+        p.addView(row(46, startBtn, resetBtn), LinearLayout.LayoutParams(-1, -2))
+
+        // указка: ведите пальцем — курсор на экране двигается как указка
+        p.addView(text("указка — ведите пальцем, курсор на экране покажет на слайд:", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(14), 0, dp(4)) })
+        p.addView(TouchpadView(this, { hidSens }, {
+            hid?.takeIf { it.state == HidLink.State.READY || it.state == HidLink.State.USB_OFF }
+                ?: null.also { say("> донгл не подключён — [ подключить ]", err = true) }
+        }, { false }), LinearLayout.LayoutParams(-1, -2))
+        p.addView(text("Клавиши слайдов работают в PowerPoint, Keynote, Google Презентациях, PDF. Подключите донгл во вкладке «тачпад».", 12f, Term.DIM).apply {
             typeface = Term.ru; setPadding(dp(4), dp(12), 0, 0) })
         return p
     }
