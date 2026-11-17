@@ -28,6 +28,10 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     @Published var choices: [HidChoice] = []
     /// На плате сохранён скрипт (scr=1 в INFO).
     @Published var scrSaved = false
+    /// Зажатые (залипшие) клавиши — id = mods<<8 | code; для подсветки кнопок.
+    @Published var heldKeys: Set<UInt16> = []
+    /// Залипшие кнопки мыши (1 левая, 2 правая, 4 средняя).
+    @Published var mouseMask: UInt8 = 0
 
     private var central: CBCentralManager?
     private var peripheral: CBPeripheral?
@@ -81,6 +85,8 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
 
     private func reset(_ s: String) {
         stickyMods = 0
+        heldKeys = []
+        mouseMask = 0
         ledKind = ""
         scrSaved = false
         rx = nil
@@ -329,10 +335,36 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     /// Медиа/ТВ-клавиша (Consumer, 16-бит usage) — нажать и отпустить.
     @discardableResult func consumer(_ usage: UInt16) -> Bool { send([0x09, UInt8(usage & 0xFF), UInt8((usage >> 8) & 0xFF)]) }
 
-    /// Отпустить всё ([0x06]: клавиши и кнопки мыши) и снять залипшие модификаторы.
+    /// Отпустить всё ([0x06]: клавиши и кнопки мыши) и снять все залипания и подсветку.
     func releaseAll() {
         if ready { send([0x06]) }
         stickyMods = 0
+        heldKeys = []
+        mouseMask = 0
+    }
+
+    static func keyId(_ mods: UInt8, _ code: UInt8) -> UInt16 { (UInt16(mods) << 8) | UInt16(code) }
+    func isHeld(_ mods: UInt8, _ code: UInt8) -> Bool { heldKeys.contains(HidLink.keyId(mods, code)) }
+
+    /// Залипание клавиши: касание держит её (KEYDOWN) до повторного касания (KEYUP). Можно несколько сразу.
+    @discardableResult func toggleHold(_ mods: UInt8, _ code: UInt8) -> Bool {
+        let id: UInt16 = HidLink.keyId(mods, code)
+        if heldKeys.contains(id) {
+            let ok: Bool = keyUp(mods, code)
+            heldKeys.remove(id)
+            return ok
+        }
+        if !keyDown(mods, code) { return false }
+        heldKeys.insert(id)
+        return true
+    }
+
+    /// Залипание кнопки мыши: держится до повторного касания; пока держится — движение = перетаскивание.
+    @discardableResult func toggleMouse(_ bit: UInt8) -> Bool {
+        let m: UInt8 = mouseMask ^ bit
+        if !buttons(m) { return false }
+        mouseMask = m
+        return true
     }
 
     /// Залипающий модификатор: касание — зажать, ещё касание — отпустить.
@@ -386,6 +418,8 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
 /// UIView для тачпада: настоящие касания (один и два пальца), курсор, клики, прокрутка, перетаскивание.
 final class TouchPadView: UIView {
     var sens: CGFloat = 1
+    /// Режим рисования: одно касание сразу зажимает левую кнопку и двигает (рисует/выделяет).
+    var drawMode = false
     var onMove: ((Int, Int) -> Void)?
     var onWheel: ((Int) -> Void)?
     var onClick: ((UInt8) -> Void)?
@@ -445,7 +479,12 @@ final class TouchPadView: UIView {
         if all.count == 1, let t = all.first {
             lastPoint = t.location(in: self)
             lastTime = t.timestamp
-            scheduleHold()
+            if drawMode {
+                dragging = true                       // рисование: сразу «мышь нажата»
+                onButtons?(1)
+            } else {
+                scheduleHold()
+            }
         } else {
             hold?.cancel()
             lastMid = mid(all)
@@ -539,6 +578,7 @@ final class TouchPadView: UIView {
 
 struct TouchSurface: UIViewRepresentable {
     let sens: CGFloat
+    var drawMode: Bool = false
     let onMove: (Int, Int) -> Void
     let onWheel: (Int) -> Void
     let onClick: (UInt8) -> Void
@@ -554,6 +594,7 @@ struct TouchSurface: UIViewRepresentable {
 
     private func apply(_ v: TouchPadView) {
         v.sens = sens
+        v.drawMode = drawMode
         v.onMove = onMove
         v.onWheel = onWheel
         v.onClick = onClick
@@ -583,6 +624,8 @@ struct TouchpadPanel: View {
     @State private var liveSens: Double?
     /// Подвкладка: 0 — тачпад, 1 — светодиод.
     @AppStorage("hidSub") private var sub = 0
+    /// Режим рисования на поле тачпада.
+    @State private var drawMode = false
     @Environment(\.scenePhase) private var scenePhase
     /// «Мои сочетания» (JSON [{"n":имя,"m":mods,"k":keycode}]).
     @AppStorage("hid_combos") private var combosJSON = ""
@@ -656,10 +699,12 @@ struct TouchpadPanel: View {
 
     private var touchArea: some View {
         VStack(alignment: .leading, spacing: 8) {
+            drawRow
             pad
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 8) {
                     clickRow
+                    mouseLatchRow
                     sensSlider
                     typeRow
                     stickyRow
@@ -729,7 +774,7 @@ struct TouchpadPanel: View {
         GeometryReader { g in
             ZStack {
                 Canvas { ctx, size in TouchpadPanel.dots(ctx, size) }
-                TouchSurface(sens: factor,
+                TouchSurface(sens: factor, drawMode: drawMode,
                              onMove: { dx, dy in run(link.move(dx, dy)) },
                              onWheel: { w in run(link.move(0, 0, wheel: w)) },
                              onClick: { m in run(link.click(m)) },
@@ -763,6 +808,30 @@ struct TouchpadPanel: View {
             button("[ Л ]", on: false, height: 44) { run(link.click(1)) }
             button("[ С ]", on: false, height: 44) { run(link.click(4)) }
             button("[ П ]", on: false, height: 44) { run(link.click(2)) }
+        }
+    }
+
+    /// Переключатель рисования над полем тачпада.
+    private var drawRow: some View {
+        HStack(spacing: 6) {
+            button(drawMode ? "[ ✎ рисовать: вкл ]" : "[ ✎ рисовать ]", on: drawMode, height: 40) { drawMode.toggle() }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Залипающие кнопки мыши: касание фиксирует кнопку (подсветка), повторное — отпускает.
+    private var mouseLatchRow: some View {
+        HStack(spacing: 6) {
+            mouseLatch("⬇Л", 1)
+            mouseLatch("⬇С", 4)
+            mouseLatch("⬇П", 2)
+        }
+    }
+
+    private func mouseLatch(_ title: String, _ bit: UInt8) -> some View {
+        let on: Bool = link.mouseMask & bit != 0
+        return Button { run(link.toggleMouse(bit)) } label: {
+            TabLabel(title: title, on: on, height: 44, ruSize: 13, forceRu: true)
         }
     }
 
@@ -969,7 +1038,10 @@ struct HidCombo: Codable {
 
 /// Кнопка-клавиша с зажатием: касание — KEYDOWN, палец убран (или ушёл с кнопки, или началась прокрутка) — KEYUP.
 /// Очень быстрый тап, не показавший нажатие, шлёт обычное нажатие KEY. В режиме правки касание вызывает tapOverride.
+/// Кнопка-клавиша: короткое касание — обычное нажатие; долгое (0,5 с) — залипание (держится до повторного
+/// касания), можно держать несколько клавиш сразу (W+A в играх). В режиме правки касание вызывает tapOverride.
 struct HoldKeyButton: View {
+    @ObservedObject private var link = HidLink.shared
     let title: String
     let mods: UInt8
     let code: UInt8
@@ -977,31 +1049,13 @@ struct HoldKeyButton: View {
     let notConnected: () -> Void
     var tapOverride: (() -> Void)? = nil
 
-    @State private var pressed = false
-    @State private var sawPress = false
+    private var held: Bool { link.isHeld(mods, code) }
 
     var body: some View {
-        Button(action: tapped) {
-            TabLabel(title: title, on: pressed, height: height, ruSize: 12, forceRu: true)
-        }
-        .buttonStyle(PressReport(onPress: { p in press(p) }))
-    }
-
-    private func press(_ p: Bool) {
-        if tapOverride != nil { return }
-        if p {
-            sawPress = true
-            if !pressed {
-                if HidLink.shared.keyDown(mods, code) {
-                    pressed = true
-                } else {
-                    notConnected()
-                }
-            }
-        } else if pressed {
-            pressed = false
-            HidLink.shared.keyUp(mods, code)
-        }
+        TabLabel(title: title, on: held, height: height, ruSize: 12, forceRu: true)
+            .contentShape(Rectangle())
+            .onTapGesture { tapped() }
+            .onLongPressGesture(minimumDuration: 0.5) { latch() }
     }
 
     private func tapped() {
@@ -1009,8 +1063,16 @@ struct HoldKeyButton: View {
             t()
             return
         }
-        if !sawPress && !HidLink.shared.key(mods, code) { notConnected() }
-        sawPress = false
+        if held {
+            link.toggleHold(mods, code)                  // снять залипание
+        } else if !link.key(mods, code) {
+            notConnected()
+        }
+    }
+
+    private func latch() {
+        if tapOverride != nil { return }
+        if !link.toggleHold(mods, code) { notConnected() }
     }
 }
 

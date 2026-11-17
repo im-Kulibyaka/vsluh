@@ -45,21 +45,24 @@ final class AudioIr: IrTransmitter {
         if !player.isPlaying { player.play() }
     }
 
-    func transmit(_ pattern: [Int]) throws {
+    func transmit(_ pattern: [Int]) throws { try transmit(pattern, carrierHz: Nec.carrier) }
+
+    /// Передать паттерн с заданной несущей (библиотека: NEC 38 кГц, SIRC 40 кГц, raw — своя).
+    func transmit(_ pattern: [Int], carrierHz: Int) throws {
         try start()
-        guard let buf = render(pattern) else { throw IrError(message: "Не удалось подготовить звук") }
+        guard let buf = render(pattern, carrierHz: carrierHz) else { throw IrError(message: "Не удалось подготовить звук") }
         let done = DispatchSemaphore(value: 0)
         player.scheduleBuffer(buf, completionCallbackType: .dataPlayedBack) { _ in done.signal() }
         _ = done.wait(timeout: .now() + 2)
     }
 
-    private func render(_ pattern: [Int]) -> AVAudioPCMBuffer? {
+    private func render(_ pattern: [Int], carrierHz: Int = Nec.carrier) -> AVAudioPCMBuffer? {
         let leadIn = Int(AudioIr.rate / 50)   // 20 мс тишины, чтобы звуковой тракт успел включиться
         let total = leadIn + pattern.reduce(0) { $0 + Int(Double($1) * AudioIr.rate / 1e6) } + 64
         guard let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(total)),
               let ch = buf.floatChannelData else { return nil }
         let l = ch[0], r = ch[1]
-        let step = 2 * Double.pi * Double(Nec.carrier / 2) / AudioIr.rate
+        let step = 2 * Double.pi * Double(carrierHz / 2) / AudioIr.rate
         var n = 0
         for _ in 0..<leadIn { l[n] = 0; r[n] = 0; n += 1 }
         for (i, us) in pattern.enumerated() {
@@ -120,6 +123,12 @@ final class TasmotaIr {
     /// Любой протокол Tasmota (например кондиционеры Haier): Protocol, Bits и Data одной строкой hex.
     func sendRaw(proto: String, bits: Int, data: String) throws {
         try send("IRSend {\"Protocol\":\"\(proto)\",\"Bits\":\(bits),\"Data\":\"\(data)\"}")
+    }
+
+    /// Сырой паттерн (мкс mark/space) с частотой — для библиотеки пультов.
+    func sendRawPattern(_ pattern: [Int], freq: Int) throws {
+        let timings: String = pattern.map { String($0) }.joined(separator: ",")
+        try send("IRsend \(freq),\(timings)")
     }
 
     /// Tasmota кодирует NEC сама — отправляем готовый 32-битный код.

@@ -97,7 +97,7 @@ section{scroll-margin-top:16px}
     <nav class="toc" aria-label="Разделы">
       <a href="#download">скачать</a><a href="#android">android</a><a href="#iphone">iphone</a><a href="#tx">передатчики</a>
       <a href="#start">запуск</a><a href="#tabs">вкладки</a><a href="#boards">доски</a><a href="#projectors">проекторы</a>
-      <a href="#ac">кондиционер</a><a href="#scripts">сценарии</a><a href="#screenoff">экран выключен</a><a href="#touchpad">тачпад</a><a href="#roulette">рулетка</a><a href="#themes">темы</a><a href="#distance">расстояние</a>
+      <a href="#ac">кондиционер</a><a href="#scripts">сценарии</a><a href="#screenoff">экран выключен</a><a href="#touchpad">тачпад</a><a href="#library">библиотека</a><a href="#roulette">рулетка</a><a href="#themes">темы</a><a href="#distance">расстояние</a>
       <a href="#trouble">не работает</a><a href="#faq">вопросы</a>
     </nav>
   </header>
@@ -360,6 +360,11 @@ ENTER</pre>
       <tr><td>красный</td><td>Подключился чужой телефон — донгл привязан к другому. Сброс: BOOT 3 с.</td></tr>
     </table></div>
     <p class="note">«подключён · доска не видит USB» — донгл работает, но доска его не опознала: попробуйте другой USB-разъём или кабель без переходников-хабов. Для донгла на <b>ESP32-C3</b> статус «подключите «krisa37 HID» в Bluetooth доски» значит: откройте на доске «Настройки → Bluetooth» и подключите «krisa37 HID» (у C3 нет USB-клавиатуры — он работает по Bluetooth).</p>
+  </section>
+
+  <section id="library">
+    <h2><span class="n">&gt;</span> Библиотека пультов</h2>
+    <p>Вкладка «Библиотека» — тысячи готовых ИК-пультов из открытой базы Flipper-IRDB. Выберите категорию (телевизоры, кондиционеры и т.д.), бренд и модель — появится сетка кнопок; нажатие отправляет ИК-команду через текущий передатчик ([tx]: звуковой адаптер или Wi-Fi). Над списком есть поиск по названию. Данные подгружаются из сети при первом открытии, поэтому для первого раза нужен интернет.</p>
   </section>
 
   <section id="roulette">
