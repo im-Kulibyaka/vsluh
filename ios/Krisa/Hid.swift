@@ -2270,7 +2270,10 @@ struct GamepadPanel: View {
     @AppStorage("gp_labels") private var labels = 0
 
     @State private var showSettings = false
-    @State private var lxv = 0, lyv = 0, rxv = 0, ryv = 0
+    @State private var lxv = 0
+    @State private var lyv = 0
+    @State private var rxv = 0
+    @State private var ryv = 0
 
     var body: some View {
         ScrollView(showsIndicators: false) {
