@@ -11,6 +11,7 @@
  * горит — телефон подключён, мигает часто — подключился чужой телефон.
  * 0x08 LED [0x08, mode, r, g, b, bright]: 0 авто, 1 горит, 2 дыхание, 3 мигает, 4 выкл — светодиод тут один (синий),
  * цвет не важен, только яркость. В INFO — «led=mono».
+ * 0x0A GAMEPAD [0x0A, btnLo, btnHi, lx, ly, rx, ry, hat]: игровой пульт (отчёт 4) — 16 кнопок, 2 стика, hat.
  */
 #include <BLEDevice.h>
 #include <BLEServer.h>
@@ -23,7 +24,7 @@
 #include "types.h"
 #include "keymap.h"
 
-#define VERSION "1.4"
+#define VERSION "1.5"
 #define SERVICE_UUID "6b7e0001-3a1f-4c7e-9d2a-6b72697361a0"
 #define RX_UUID      "6b7e0002-3a1f-4c7e-9d2a-6b72697361a0"
 #define INFO_UUID    "6b7e0003-3a1f-4c7e-9d2a-6b72697361a0"
@@ -49,10 +50,17 @@ static const uint8_t REPORT_MAP[] = {
   0x05, 0x0C, 0x09, 0x01, 0xA1, 0x01, 0x85, 0x03,
   0x19, 0x00, 0x2A, 0xFF, 0x03, 0x15, 0x00, 0x26, 0xFF, 0x03, 0x75, 0x10, 0x95, 0x01, 0x81, 0x00,
   0xC0,
+  // игровой пульт (отчёт 4): 16 кнопок, hat, 4 оси (X Y Z Rz) — payload 7 байт
+  0x05, 0x01, 0x09, 0x05, 0xA1, 0x01, 0x85, 0x04,
+  0x05, 0x09, 0x19, 0x01, 0x29, 0x10, 0x15, 0x00, 0x25, 0x01, 0x75, 0x01, 0x95, 0x10, 0x81, 0x02,
+  0x05, 0x01, 0x09, 0x39, 0x15, 0x00, 0x25, 0x07, 0x35, 0x00, 0x46, 0x3B, 0x01, 0x65, 0x14, 0x75, 0x04, 0x95, 0x01, 0x81, 0x42,
+  0x65, 0x00, 0x75, 0x04, 0x95, 0x01, 0x81, 0x03,
+  0x05, 0x01, 0x09, 0x30, 0x09, 0x31, 0x09, 0x32, 0x09, 0x35, 0x15, 0x81, 0x25, 0x7F, 0x75, 0x08, 0x95, 0x04, 0x81, 0x02,
+  0xC0,
 };
 
 BLEServer *server;
-BLECharacteristic *info, *kbIn, *mouseIn, *consumerIn;
+BLECharacteristic *info, *kbIn, *mouseIn, *consumerIn, *gamepadIn;
 Preferences prefs;
 QueueHandle_t queue;
 
@@ -140,6 +148,13 @@ void mouseReport(int8_t x, int8_t y, int8_t w, int8_t pan) {
   mouseIn->setValue(r, sizeof(r)); mouseIn->notify();
 }
 
+/* Игровой пульт: hat приходит 0 центр / 1 вверх … 8 влево-вверх; в отчёте 0..7 (0=вверх) или 0x0F центр. */
+void gamepadReport(uint16_t btn, uint8_t hat, int8_t lx, int8_t ly, int8_t rx, int8_t ry) {
+  uint8_t h = hat == 0 || hat > 8 ? 0x0F : (uint8_t)(hat - 1);
+  uint8_t r[7] = {(uint8_t)(btn & 0xFF), (uint8_t)(btn >> 8), h, (uint8_t)lx, (uint8_t)ly, (uint8_t)rx, (uint8_t)ry};
+  gamepadIn->setValue(r, sizeof(r)); gamepadIn->notify();
+}
+
 uint32_t pendingCp = 0;
 int pendingLeft = 0;
 
@@ -217,6 +232,7 @@ void handle(const Packet &p) {
   if (t == 0x06 && p.len < 3) {                 // «отпустить всё» — безопасно всегда
     heldMods = 0; memset(heldKeys, 0, sizeof(heldKeys)); keyReport(0, 0);
     if (mouseButtons) { mouseButtons = 0; mouseReport(0, 0, 0, 0); }
+    gamepadReport(0, 0, 0, 0, 0, 0);
     return;
   }
   if (auth != AUTH_OK) return;
@@ -247,6 +263,10 @@ void handle(const Packet &p) {
       break;
     case 0x09:                                   // ТВ/телефон: медиа-клавиша
       if (p.len >= 3) { uint8_t r[2] = {p.data[1], p.data[2]}; consumerIn->setValue(r, 2); consumerIn->notify(); delay(60); uint8_t z[2] = {0, 0}; consumerIn->setValue(z, 2); consumerIn->notify(); }
+      break;
+    case 0x0A:                                   // игровой пульт: кнопки + стики + hat
+      if (p.len >= 8)
+        gamepadReport(p.data[1] | (p.data[2] << 8), p.data[7], (int8_t)p.data[3], (int8_t)p.data[4], (int8_t)p.data[5], (int8_t)p.data[6]);
       break;
     case 0x20: scriptRecv = 0; break;
     case 0x21: { size_t c = p.len - 1; if (scriptRecv + c <= SCRIPT_MAX) { memcpy(scriptBuf + scriptRecv, p.data + 1, c); scriptRecv += c; } break; }
@@ -281,6 +301,7 @@ void setup() {
   hid->outputReport(1);                         // светодиоды Caps/Num — не используем
   mouseIn = hid->inputReport(2);
   consumerIn = hid->inputReport(3);
+  gamepadIn = hid->inputReport(4);
   hid->manufacturer()->setValue("krisa37");
   hid->pnp(0x02, 0x303A, 0x8137, 0x0100);
   hid->hidInfo(0x00, 0x01);
