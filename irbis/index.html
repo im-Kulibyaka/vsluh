@@ -461,7 +461,7 @@ body.touch #grid,body.touch #more,body.touch #grid2{display:none}
 .mdl .hcb .srow .gear.tab.acb{flex:1;text-align:center;padding:0}
 .mdl .hsel{height:42px;font:15px var(--ru);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:0;padding:0 8px}
 [data-theme=prism] .mdl .hsel{border-radius:12px}
-.hidp .hsub{margin:10px 0 0}
+.hidp .hsub{margin:10px 0 0;flex-wrap:wrap;gap:6px}
 .hidp .hpad[hidden],.hidp .hled[hidden]{display:none}
 .hidp .lmodes{margin-top:10px}
 .hidp .lmodes .gear.tab.acb{padding:0 2px;font-size:13px}
@@ -494,6 +494,43 @@ body.touch #grid,body.touch #more,body.touch #grid2{display:none}
 .hidp .tvdpad .gear.tab.acb{height:52px;font-size:18px}
 .hidp .tvdpad .up{grid-column:2}.hidp .tvdpad .lf{grid-column:1}.hidp .tvdpad .ok{grid-column:2}.hidp .tvdpad .rt{grid-column:3}.hidp .tvdpad .dn{grid-column:2}
 .hidp .recpad.on{border-color:#FF3B30;box-shadow:inset 0 0 0 2px #FF3B30}
+/* геймпад */
+.hidp .gpsticks{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.hidp .gpstick{position:relative;aspect-ratio:1/1;border:1px solid var(--line);border-radius:50%;touch-action:none;overflow:hidden;
+  background:radial-gradient(circle,color-mix(in srgb,var(--fg) 20%,transparent) 1px,transparent 1.5px) 0 0/16px 16px,color-mix(in srgb,var(--bg) 70%,transparent)}
+[data-theme=thermal] .hidp .gpstick{border-color:var(--yel)}
+.hidp .gpstick i{position:absolute;left:50%;top:50%;width:36%;height:36%;margin:-18% 0 0 -18%;border-radius:50%;
+  border:2px solid var(--fg);background:color-mix(in srgb,var(--fg) 18%,transparent);pointer-events:none}
+.hidp .gpstick b{position:absolute;left:0;right:0;bottom:6px;text-align:center;font:11px var(--ru);color:var(--dim);pointer-events:none}
+.hidp .gpmid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px}
+.hidp .gpdpad,.hidp .gpface{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:6px}
+.hidp .gpdpad .gear.tab.acb,.hidp .gpface .gear.tab.acb{height:44px;font-size:16px;padding:0}
+.hidp .gpdpad .du{grid-area:1/2}.hidp .gpdpad .dul{grid-area:1/1}.hidp .gpdpad .dur{grid-area:1/3}
+.hidp .gpdpad .dl{grid-area:2/1}.hidp .gpdpad .dr{grid-area:2/3}
+.hidp .gpdpad .dd{grid-area:3/2}.hidp .gpdpad .ddl{grid-area:3/1}.hidp .gpdpad .ddr{grid-area:3/3}
+.hidp .gpface .fy{grid-area:1/2}.hidp .gpface .fx{grid-area:2/1}.hidp .gpface .fb{grid-area:2/3}.hidp .gpface .fa{grid-area:3/2}
+.hidp .gprow{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+.hidp .gprow .gear.tab.acb{height:42px;font-size:13px;padding:0 2px}
+.hidp .gpgear{margin-top:12px}
+.hidp .gpset{margin-top:8px;border:1px solid var(--line);padding:10px}
+[data-theme=prism] .hidp .gpset{border-radius:16px}
+.hidp .gpset[hidden]{display:none}
+.hidp .gpset .bps{margin-top:22px}
+.hidp .gptog{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.hidp .gptog .gear.tab.acb{height:40px;font-size:13px;padding:0 2px}
+.hidp .gplab .gear.tab.acb{font-size:12px;padding:0 2px}
+.hidp .gphint,.hidp .preshint{margin-top:12px}
+/* презентер */
+.hidp .presnav{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.hidp .presnav .gear.tab.acb{height:70px;font-size:18px}
+.hidp .presrow{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.hidp .presrow2{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:8px}
+.hidp .presrow .gear.tab.acb,.hidp .presrow2 .gear.tab.acb{height:44px;font-size:13px;padding:0 2px}
+.hidp .prestimer{display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px;border:1px solid var(--line);
+  background:color-mix(in srgb,var(--bg) 70%,transparent)}
+[data-theme=prism] .hidp .prestimer{border-radius:16px}
+.hidp .prestimer .tval{flex:1;font:28px var(--mono);color:var(--fg);letter-spacing:2px}
+.hidp .prestimer .gear.tab.acb{flex:none;height:40px;font-size:13px;padding:0 10px}
 .libp{display:none}
 body.lib #lib{display:block}
 body.lib #grid,body.lib #more,body.lib #grid2,body.lib .status{display:none}
@@ -2504,6 +2541,7 @@ function hidReleaseAll() {
   HID.sticky = 0; HID.mbtn = 0; hidStickyRender();
   document.querySelectorAll('#touch .hkeys .on, #touch .hcombos .on').forEach(b => b._clr ? b._clr() : b.classList.remove('on'));
   document.querySelectorAll('#touch .hmbtn button.on').forEach(b => b.classList.remove('on'));
+  window.gpNeutral && window.gpNeutral();   // геймпад — нейтраль (все нули) и сброс подсветки
 }
 function hidStickyRender() { document.querySelectorAll('#touch .hmods button[data-m]').forEach(b => b.classList.toggle('on', !!(HID.sticky & +b.dataset.m))); }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') hidReleaseAll(); });
@@ -2548,7 +2586,7 @@ function hidText(text) {
     + '<div class="tp" aria-label="Тачпад"><span>один палец — курсор · касание — клик · два пальца — прокрутка и правый клик · удержание — перетащить</span></div>'
     + '<div class="srow hbtn"></div><div class="srow hmbtn"></div><div class="hsens"></div>'
     + '<div class="srow htxt"><input type="text" class="hin" placeholder="⌨ печатать…" autocomplete="off" spellcheck="false"></div><div class="srow hlang"></div>'
-    + '<div class="srow hmods"></div><div class="hkeys"></div><p class="xl">мои сочетания</p><div class="hkeys hcombos"></div></div><div class="hled" hidden></div><div class="hscr" hidden></div><div class="htv" hidden></div><a class="hflash" href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
+    + '<div class="srow hmods"></div><div class="hkeys"></div><p class="xl">мои сочетания</p><div class="hkeys hcombos"></div></div><div class="hled" hidden></div><div class="hscr" hidden></div><div class="htv" hidden></div><div class="hgp" hidden></div><div class="hpres" hidden></div><a class="hflash" href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
   box.querySelector('.hcon').addEventListener('click', () => HID.state === 'on' ? hidDisconnect() : hidConnect());
   // клики Л / С / П
   [['[ Л ]', 1], ['[ С ]', 4], ['[ П ]', 2]].forEach(([l, m]) => sBtn(box.querySelector('.hbtn'), l, () => hidClick(m)));
@@ -2735,13 +2773,17 @@ function hidText(text) {
   let sub = 0;
   try { sub = parseInt(localStorage.getItem('krisa-hid-sub'), 10) || 0; } catch {}
   const subBox = box.querySelector('.hsub');
-  sub = Math.max(0, Math.min(3, sub));
+  sub = Math.max(0, Math.min(5, sub));
+  let prevSub = sub;
   const showSub = () => {
+    if (prevSub === 4 && sub !== 4) gpNeutral();   // ушли с геймпада — нейтраль
     [...subBox.children].forEach((c, i) => c.classList.toggle('on', i === sub));
-    box.querySelector('.hpad').hidden = sub !== 0; box.querySelector('.hled').hidden = sub !== 1; box.querySelector('.hscr').hidden = sub !== 2; box.querySelector('.htv').hidden = sub !== 3;
-    if (sub === 1) ledRender(); else if (sub === 2) scrRender(); else if (sub === 3) tvRender();
+    box.querySelector('.hpad').hidden = sub !== 0; box.querySelector('.hled').hidden = sub !== 1; box.querySelector('.hscr').hidden = sub !== 2;
+    box.querySelector('.htv').hidden = sub !== 3; box.querySelector('.hgp').hidden = sub !== 4; box.querySelector('.hpres').hidden = sub !== 5;
+    if (sub === 1) ledRender(); else if (sub === 2) scrRender(); else if (sub === 3) tvRender(); else if (sub === 4) gpRender(); else if (sub === 5) presRender();
+    prevSub = sub;
   };
-  chipRow(subBox, ['тачпад', 'светодиод', 'скрипт', 'ТВ'], i => { sub = i; try { localStorage.setItem('krisa-hid-sub', String(i)); } catch {} showSub(); });
+  chipRow(subBox, ['тачпад', 'светодиод', 'скрипт', 'ТВ', 'геймпад', 'презентер'], i => { sub = i; try { localStorage.setItem('krisa-hid-sub', String(i)); } catch {} showSub(); });
 
   /* «светодиод»: пакет 0x08 LED [0x08, mode, r, g, b, bright] — 0 авто (статус), 1 цвет, 2 дыхание, 3 радуга (на C3 — мигает), 4 выкл.
      При движении ползунка — не чаще раза в 60 мс и финальный при отпускании. Состояние хранится и шлётся при каждом подключении (после AUTH), если не «авто». */
@@ -3016,6 +3058,192 @@ function hidText(text) {
     btn('.tvvol', 'Vol+', () => hidCons(0x00E9)); btn('.tvvol', 'Vol-', () => hidCons(0x00EA)); btn('.tvvol', 'Mute', () => hidCons(0x00E2));
     btn('.tvch', 'Канал+', () => hidCons(0x009C)); btn('.tvch', 'Канал-', () => hidCons(0x009D));
     btn('.tvmedia', '⏮', () => hidCons(0x00B6)); btn('.tvmedia', '⏯', () => hidCons(0x00CD)); btn('.tvmedia', '⏹', () => hidCons(0x00B7)); btn('.tvmedia', '⏭', () => hidCons(0x00B5));
+  }
+
+  /* ---------- Подвкладка «геймпад»: HID-геймпад, пакет 0x0A [btnLo, btnHi, lx, ly, rx, ry, hat] ----------
+     Биты: A=0,B=1,X=2,Y=3, L1=4,R1=5,L2=6,R2=7, Select=8,Start=9, L3=10,R3=11. hat 0 центр, 1 вверх … по часовой до 8 влево-вверх.
+     Нажатия кнопок/hat — сразу; стики троттлим (~25 мс), шлём абсолютное состояние. Уход/отключение — нейтраль (все нули). */
+  const GB = box.querySelector('.hgp');
+  const GP = { btn: 0, hat: 0, lx: 0, ly: 0, rx: 0, ry: 0 };
+  const GPset = { dead: 12, sens: 100, invL: false, invR: false, swap: false, turbo: false, haptic: true, labels: 0 };
+  try { const v = JSON.parse(localStorage.getItem('krisa-hid-gp') || 'null'); if (v) Object.assign(GPset, v); } catch {}
+  const gpSave = () => { try { localStorage.setItem('krisa-hid-gp', JSON.stringify(GPset)); } catch {} };
+  const FACE = [['A', 'B', 'X', 'Y'], ['✕', '○', '□', '△'], ['1', '2', '3', '4']];   // индекс = кнопка A=0,B=1,X=2,Y=3
+  const faceLabel = i => FACE[Math.max(0, Math.min(2, GPset.labels))][i];
+  let gpTurboTimer = null, gpTurboPhase = true;
+  const gpOut = () => {
+    let b = GP.btn;
+    if (GPset.turbo) b = (b & ~0x0F) | (gpTurboPhase ? (GP.btn & 0x0F) : 0);   // турбо: лицевые биты пульсируют
+    return [0x0A, b & 0xff, (b >> 8) & 0xff, i8(GP.lx), i8(GP.ly), i8(GP.rx), i8(GP.ry), GP.hat];
+  };
+  const gpSend = () => { if (HID.state === 'on' && HID.rx) hidSend(gpOut()); };
+  function gpUpdTurbo() {
+    const anyFace = GPset.turbo && (GP.btn & 0x0F);
+    if (anyFace) { if (!gpTurboTimer) { gpTurboPhase = true; gpTurboTimer = setInterval(() => { gpTurboPhase = !gpTurboPhase; gpSend(); }, 83); } }
+    else if (gpTurboTimer) { clearInterval(gpTurboTimer); gpTurboTimer = null; gpTurboPhase = true; }
+  }
+  /** Нажать/отпустить кнопку (bit). */
+  function gpPress(bit, down) {
+    if (down) GP.btn |= (1 << bit); else GP.btn &= ~(1 << bit);
+    if (bit <= 3) gpUpdTurbo();
+    gpSend();
+    if (down && GPset.haptic) navigator.vibrate?.(10);
+  }
+  /** Нормаль стика (-1..1) → int8 с мёртвой зоной и чувствительностью. */
+  function gpMap(nx, ny, invY) {
+    const dead = GPset.dead / 100, mag = Math.hypot(nx, ny);
+    if (mag < dead || mag === 0) return [0, 0];
+    const f = ((mag - dead) / (1 - dead)) / mag, sens = GPset.sens / 100;
+    let x = Math.max(-1, Math.min(1, nx * f * sens)), y = Math.max(-1, Math.min(1, ny * f * sens));
+    if (invY) y = -y;
+    return [Math.round(x * 127), Math.round(y * 127)];
+  }
+  let gpStickT = null, gpStickLast = 0;
+  const gpQueueStick = () => { if (gpStickT) return; const w = Math.max(0, 25 - (performance.now() - gpStickLast)); gpStickT = setTimeout(() => { gpStickT = null; gpStickLast = performance.now(); gpSend(); }, w); };
+  function gpReset() {
+    GP.btn = 0; GP.hat = 0; GP.lx = GP.ly = GP.rx = GP.ry = 0;
+    if (gpTurboTimer) { clearInterval(gpTurboTimer); gpTurboTimer = null; gpTurboPhase = true; }
+    clearTimeout(gpStickT); gpStickT = null;
+  }
+  /** Нейтраль: сбросить состояние и (если подключены) отправить все нули. */
+  function gpNeutral() { const on = HID.state === 'on' && HID.rx; gpReset(); if (on) hidSend([0x0A, 0, 0, 0, 0, 0, 0, 0]); GB.querySelectorAll('.gpface .on,.gpdpad .on,.gpsh .on,.gpsys .on').forEach(b => b.classList.remove('on')); GB.querySelectorAll('.gpstick i').forEach(k => k.style.transform = ''); }
+  window.gpNeutral = gpNeutral;   // чтобы hidReleaseAll (отключение/уход с вкладки/сворачивание) сбросил геймпад
+  /** Поле-стик: палец тянет шайбу, отпустил — центр. which 0 — левый, 1 — правый (с учётом обмена). */
+  function gpBindStick(el, which) {
+    const knob = el.querySelector('i'); let active = null;
+    const apply = (nx, ny) => {
+      const t = GPset.swap ? (1 - which) : which, inv = t === 0 ? GPset.invL : GPset.invR, [vx, vy] = gpMap(nx, ny, inv);
+      if (t === 0) { GP.lx = vx; GP.ly = vy; } else { GP.rx = vx; GP.ry = vy; }
+      gpQueueStick();
+    };
+    const move = e => {
+      const r = el.getBoundingClientRect(), rad = r.width / 2;
+      let nx = (e.clientX - r.left - rad) / rad, ny = (e.clientY - r.top - rad) / rad;
+      const m = Math.hypot(nx, ny); if (m > 1) { nx /= m; ny /= m; }
+      knob.style.transform = 'translate(' + (nx * rad * 0.62) + 'px,' + (ny * rad * 0.62) + 'px)';
+      apply(nx, ny);
+    };
+    const end = e => { if (active !== e.pointerId) return; active = null; knob.style.transform = ''; const t = GPset.swap ? (1 - which) : which; if (t === 0) { GP.lx = GP.ly = 0; } else { GP.rx = GP.ry = 0; } gpSend(); };
+    el.addEventListener('pointerdown', e => { el.setPointerCapture?.(e.pointerId); active = e.pointerId; move(e); });
+    el.addEventListener('pointermove', e => { if (active === e.pointerId) move(e); });
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  }
+  /** Кнопка-зажатие: pointerdown — bit вниз, pointerup/cancel/leave — bit вверх. */
+  function gpHold(b, bit) {
+    b.addEventListener('pointerdown', e => { if (e.button > 0) return; b.classList.add('on'); gpPress(bit, true); });
+    const up = () => { if (!b.classList.contains('on')) return; b.classList.remove('on'); gpPress(bit, false); };
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(n => b.addEventListener(n, up));
+    b.addEventListener('contextmenu', e => e.preventDefault());
+  }
+  /** Кнопка-крестовина: pointerdown — hat = dir, отпускание — hat = 0. */
+  function gpHatBtn(b, dir) {
+    b.addEventListener('pointerdown', e => { if (e.button > 0) return; b.classList.add('on'); GP.hat = dir; gpSend(); if (GPset.haptic) navigator.vibrate?.(8); });
+    const up = () => { if (!b.classList.contains('on')) return; b.classList.remove('on'); GP.hat = 0; gpSend(); };
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(n => b.addEventListener(n, up));
+    b.addEventListener('contextmenu', e => e.preventDefault());
+  }
+  function gpRender() {
+    gpReset();
+    GB.innerHTML = '<div class="gpsticks"><div class="gpstick gpl"><i></i><b>L</b></div><div class="gpstick gpr"><i></i><b>R</b></div></div>'
+      + '<div class="gpmid"><div class="gpdpad"></div><div class="gpface"></div></div>'
+      + '<div class="gprow gpsh"></div><div class="gprow gpsys"></div>'
+      + '<div class="gprow gpgear"><button class="gear tab acb gpcfg" style="grid-column:span 4"></button></div><div class="gpset" hidden></div>'
+      + '<p class="xl lhint gphint">Нужна прошивка донгла 1.7 (ESP32-C3 — 1.5).</p>';
+    gpBindStick(GB.querySelector('.gpl'), 0); gpBindStick(GB.querySelector('.gpr'), 1);
+    // крестовина: 8 направлений (hat 1 вверх … 8 влево-вверх)
+    const DPAD = [['du', 1, '↑'], ['dul', 8, '↖'], ['dur', 2, '↗'], ['dl', 7, '←'], ['dr', 3, '→'], ['dd', 5, '↓'], ['ddl', 6, '↙'], ['ddr', 4, '↘']];
+    const dp = GB.querySelector('.gpdpad');
+    DPAD.forEach(([cls, dir, g]) => { const b = document.createElement('button'); b.className = 'gear tab acb ' + cls; b.textContent = g; gpHatBtn(b, dir); dp.appendChild(b); });
+    // лицевые кнопки ромбом: Y сверху(3), X слева(2), B справа(1), A снизу(0)
+    const fc = GB.querySelector('.gpface');
+    [['fy', 3], ['fx', 2], ['fb', 1], ['fa', 0]].forEach(([cls, bit]) => { const b = document.createElement('button'); b.className = 'gear tab acb ' + cls; b.textContent = faceLabel(bit); gpHold(b, bit); fc.appendChild(b); });
+    // плечевые L2 L1 R1 R2 (биты 6,4,5,7)
+    const sh = GB.querySelector('.gpsh');
+    [['L2', 6], ['L1', 4], ['R1', 5], ['R2', 7]].forEach(([l, bit]) => { const b = document.createElement('button'); b.className = 'gear tab acb'; b.textContent = l; gpHold(b, bit); sh.appendChild(b); });
+    // системные L3 Select Start R3 (биты 10,8,9,11)
+    const sy = GB.querySelector('.gpsys');
+    [['L3', 10], ['Select', 8], ['Start', 9], ['R3', 11]].forEach(([l, bit]) => { const b = document.createElement('button'); b.className = 'gear tab acb'; b.textContent = l; gpHold(b, bit); sy.appendChild(b); });
+    // настройки (сворачиваемый блок)
+    const cfg = GB.querySelector('.gpcfg'), gs = GB.querySelector('.gpset');
+    let open = false;
+    const cfgUpd = () => { cfg.textContent = btnLabel(open ? '[ ⚙ настройки ▲ ]' : '[ ⚙ настройки ▼ ]'); cfg.classList.toggle('on', open); gs.hidden = !open; };
+    cfg.addEventListener('click', () => { open = !open; if (open) gpBuildSet(gs); cfgUpd(); }); cfgUpd();
+  }
+  /** Содержимое блока настроек геймпада. */
+  function gpBuildSet(gs) {
+    gs.innerHTML = '<p class="xl" style="margin-top:0">мёртвая зона стиков</p><div class="gpdead"></div>'
+      + '<p class="xl">чувствительность</p><div class="gpsens"></div>'
+      + '<div class="gptog gptbox"></div><p class="xl">подписи кнопок</p><div class="gptog gplab"></div>';
+    const dead = makeSlider({ name: 'Мёртвая зона', track: 'linear-gradient(90deg,var(--fg),var(--faint))', value: GPset.dead / 30, def: 12 / 30, mark: 'var(--dim)',
+      labels: ['0%', '30%'], commit: v => { GPset.dead = Math.round(v * 30); gpSave(); } });
+    dead.classList.add('cp'); gs.querySelector('.gpdead').appendChild(dead);
+    const sens = makeSlider({ name: 'Чувствительность', track: 'linear-gradient(90deg,var(--faint),var(--fg))', value: (GPset.sens - 50) / 100, def: 0.5, mark: 'var(--dim)',
+      labels: ['50%', '150%'], commit: v => { GPset.sens = 50 + Math.round(v * 100); gpSave(); } });
+    sens.classList.add('cp'); gs.querySelector('.gpsens').appendChild(sens);
+    const tbox = gs.querySelector('.gptbox');
+    const toggle = (label, key, after) => {
+      const b = document.createElement('button'); b.className = 'gear tab acb' + (GPset[key] ? ' on' : ''); b.textContent = label;
+      b.addEventListener('click', () => { GPset[key] = !GPset[key]; b.classList.toggle('on', GPset[key]); gpSave(); after && after(); });
+      tbox.appendChild(b); return b;
+    };
+    toggle('инверсия Y лев.', 'invL'); toggle('инверсия Y прав.', 'invR');
+    toggle('поменять стики', 'swap'); toggle('турбо', 'turbo', () => gpUpdTurbo());
+    toggle('вибро-отклик', 'haptic');
+    const lab = gs.querySelector('.gplab');
+    ['Xbox', 'PlayStation', '1·2·3·4'].forEach((l, i) => {
+      const b = document.createElement('button'); b.className = 'gear tab acb' + (GPset.labels === i ? ' on' : ''); b.textContent = l;
+      b.addEventListener('click', () => {
+        GPset.labels = i; gpSave();
+        [...lab.children].forEach((c, j) => c.classList.toggle('on', j === i));
+        [['fy', 3], ['fx', 2], ['fb', 1], ['fa', 0]].forEach(([cls, bit]) => { const el = GB.querySelector('.gpface .' + cls); if (el) el.textContent = faceLabel(bit); });
+      });
+      lab.appendChild(b);
+    });
+  }
+
+  /* ---------- Подвкладка «презентер»: только клавиатура (0x04 key), прошивка не нужна ----------
+     Наборы клавиш листания: стрелки (Left/Right), PageUp/Dn, пробел/⌫. Показ: F5, Shift+F5, Esc; чёрный B, белый W. Таймер и поле-указка. */
+  const PB = box.querySelector('.hpres');
+  const PRES_SETS = [['стрелки', 0x50, 0x4F], ['PageUp/Dn', 0x4B, 0x4E], ['пробел/⌫', 0x2A, 0x2C]];   // [подпись, назад, вперёд]
+  let presKeys = 0;
+  try { presKeys = Math.max(0, Math.min(2, parseInt(localStorage.getItem('krisa-pres-keys'), 10) || 0)); } catch {}
+  let presSec = 0, presRun = false, presIv = null;
+  const presFmt = () => { const m = (presSec / 60 | 0), s = presSec % 60; return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s; };
+  const presShow = () => { const t = PB.querySelector('.tval'); if (t) t.textContent = presFmt(); };
+  const presTick = () => { presSec++; presShow(); };
+  function gpPresPad(el) {   // поле-указка: ведём курсор (как тачпад)
+    const pts = new Map(); let ax = 0, ay = 0, last = 0, ft = null;
+    const flush = () => { ft = null; last = performance.now(); const dx = Math.trunc(ax), dy = Math.trunc(ay); ax -= dx; ay -= dy; if (dx || dy) hidMove(dx, dy); };
+    const q = () => { if (ft) return; ft = setTimeout(flush, Math.max(0, 15 - (performance.now() - last))); };
+    el.addEventListener('pointerdown', e => { el.setPointerCapture?.(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); });
+    el.addEventListener('pointermove', e => { const p = pts.get(e.pointerId); if (!p) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; ax += dx * 1.4; ay += dy * 1.4; q(); });
+    const up = e => { pts.delete(e.pointerId); };
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  }
+  function presRender() {
+    PB.innerHTML = '<div class="presnav"><button class="gear tab acb pprev">◀ назад</button><button class="gear tab acb pnext">вперёд ▶</button></div>'
+      + '<p class="xl">листать клавишами</p><div class="brands presset"></div>'
+      + '<div class="presrow pshow"></div><div class="presrow2 pbw"></div>'
+      + '<p class="xl">таймер выступления</p><div class="prestimer"><span class="tval">00:00</span><button class="gear tab acb pstart"></button><button class="gear tab acb preset">сброс</button></div>'
+      + '<p class="xl">указка</p><div class="tp prespad" aria-label="Указка"><span>ведите пальцем — курсор показывает на слайд</span></div>'
+      + '<p class="xl lhint preshint">Работает в PowerPoint, Keynote, Google Презентациях, PDF.</p>';
+    const navUpd = () => {
+      PB.querySelector('.pprev').textContent = '◀ назад'; PB.querySelector('.pnext').textContent = 'вперёд ▶';
+    };
+    PB.querySelector('.pprev').addEventListener('click', () => hidKey(0, PRES_SETS[presKeys][1]));
+    PB.querySelector('.pnext').addEventListener('click', () => hidKey(0, PRES_SETS[presKeys][2]));
+    navUpd();
+    chipRow(PB.querySelector('.presset'), PRES_SETS.map(s => s[0]), i => { presKeys = i; try { localStorage.setItem('krisa-pres-keys', String(i)); } catch {} [...PB.querySelector('.presset').children].forEach((c, j) => c.classList.toggle('on', j === i)); });
+    [...PB.querySelector('.presset').children].forEach((c, j) => c.classList.toggle('on', j === presKeys));
+    const pbtn = (sel, label, fn) => { const b = document.createElement('button'); b.className = 'gear tab acb'; b.textContent = label; b.addEventListener('click', fn); PB.querySelector(sel).appendChild(b); };
+    pbtn('.pshow', '▶ с начала', () => hidKey(0, 0x3E)); pbtn('.pshow', '▶ с текущего', () => hidKey(0x02, 0x3E)); pbtn('.pshow', '⤬ выход', () => hidKey(0, 0x29));
+    pbtn('.pbw', '⬛ чёрный', () => hidKey(0, 0x05)); pbtn('.pbw', '⬜ белый', () => hidKey(0, 0x1A));
+    const st = PB.querySelector('.pstart');
+    const stUpd = () => { st.textContent = presRun ? 'пауза' : 'старт'; st.classList.toggle('on', presRun); };
+    st.addEventListener('click', () => { presRun = !presRun; if (presRun) { if (!presIv) presIv = setInterval(presTick, 1000); } else { clearInterval(presIv); presIv = null; } stUpd(); });
+    PB.querySelector('.preset').addEventListener('click', () => { presRun = false; clearInterval(presIv); presIv = null; presSec = 0; presShow(); stUpd(); });
+    stUpd(); presShow();
+    gpPresPad(PB.querySelector('.prespad'));
   }
 
   window.scrRender = () => { if (sub === 2) scrRender(); };
@@ -3538,7 +3766,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.40', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.41', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);
