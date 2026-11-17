@@ -448,7 +448,9 @@ body.touch #grid,body.touch #more,body.touch #grid2{display:none}
 .hidp .htxt .gear.tab.acb{flex:0 0 34%}
 .hidp .hkeys{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
 .hidp .hkeys .gear.tab.acb{height:42px;padding:0 2px;font-size:13px;white-space:nowrap;touch-action:manipulation}
-.hidp .hmods{margin-top:10px}
+.hidp .hmods,.hidp .hmbtn,.hidp .hdrawrow{margin-top:10px}
+.hidp .hmbtn .gear.tab.acb{height:42px;font-size:14px}
+.hidp .hdrawrow .gear.tab.acb{height:42px;font-size:14px}
 .hidp .hmods .gear.tab.acb{height:42px;font-size:13px;padding:0 2px}
 .hidp .hmods .gear.tab.acb.rel{flex:1.6}
 .hidp .hcombos{margin-top:4px}
@@ -492,6 +494,16 @@ body.touch #grid,body.touch #more,body.touch #grid2{display:none}
 .hidp .tvdpad .gear.tab.acb{height:52px;font-size:18px}
 .hidp .tvdpad .up{grid-column:2}.hidp .tvdpad .lf{grid-column:1}.hidp .tvdpad .ok{grid-column:2}.hidp .tvdpad .rt{grid-column:3}.hidp .tvdpad .dn{grid-column:2}
 .hidp .recpad.on{border-color:#FF3B30;box-shadow:inset 0 0 0 2px #FF3B30}
+.libp{display:none}
+body.lib #lib{display:block}
+body.lib #grid,body.lib #more,body.lib #grid2,body.lib .status{display:none}
+.libp .libstat{margin:8px 2px 0;font:13px var(--ru);color:var(--dim)}
+.libp .brands{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.libp .brands .gear.tab.acb{flex:none;height:40px;font-size:13px;padding:0 10px}
+.libp .libq{width:100%;height:42px;margin-top:8px;padding:0 10px;font:14px var(--ru);background:color-mix(in srgb,var(--bg) 70%,transparent);color:var(--fg);border:1px solid var(--line);border-radius:0}
+[data-theme=prism] .libp .libq{border-radius:14px}
+.libp .libkeys{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+.libp .libkeys .gear.tab.acb{height:44px;font-size:13px;padding:0 2px}
 .hidp .hflash{display:block;margin:14px 2px 0;font:14px var(--ru);color:var(--fg)}
 [data-theme=prism] .hidp .gear.tab.acb,[data-theme=blueprint] .hidp .gear.tab.acb{font-size:12px}
 [data-theme=thermal] .hidp .hst,[data-theme=thermal] .hidp .xl{text-shadow:0 0 3px #000,0 0 6px #000}
@@ -598,7 +610,7 @@ body.proj #proj{display:block}
 [data-theme=blueprint] .gear.tab.chip{font-size:12px}
 .projnote{margin:0 2px 12px;font:13px/1.4 var(--ru);color:var(--dim)}
 /* «проектор» кириллицей в VT323 выходит крупнее — уменьшаем, чтобы подзаголовок шапки влез в строку */
-html:not([data-theme]) body:is(.proj,.boards,.ac,.scripts,.touch) .id,[data-theme=thermal] body:is(.proj,.boards,.ac,.scripts,.touch) .id{font-size:17px}
+html:not([data-theme]) body:is(.proj,.boards,.ac,.scripts,.touch,.lib) .id,[data-theme=thermal] body:is(.proj,.boards,.ac,.scripts,.touch,.lib) .id{font-size:17px}
 /* сетка проекторов — 3 колонки, низкие кнопки; подпись ужимается под ширину кнопки (--len — длина подписи, --cw — ширина буквы шрифта темы) */
 body.grid3 .grid,.g3 .grid{grid-template-columns:repeat(3,1fr);gap:8px}
 body.grid3 .key,.g3 .key{height:64px;padding:4px;container-type:inline-size;--cw:.52;line-height:1.02;
@@ -767,7 +779,7 @@ html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%
     </div>
     <div class="hbtns"><a class="gear help" href="guide/" aria-label="Как пользоваться">[?]</a><button class="gear" id="gear" aria-label="Настройки">[tx]</button></div>
   </header>
-  <nav class="tabs" id="tabs" aria-label="Пульт"><div class="trow"><button class="gear tab ru" data-r="boards">Доски</button><button class="gear tab ru" data-r="proj">Проекторы</button><button class="gear tab ru" data-r="ac">Кондиционеры</button></div><div class="trow"><button class="gear tab ru" data-r="scripts">Сценарии</button><button class="gear tab ru" data-r="touch">Тачпад</button><button class="gear tab ctab ru" data-r="color">Цвет</button></div></nav>
+  <nav class="tabs" id="tabs" aria-label="Пульт"><div class="trow"><button class="gear tab ru" data-r="boards">Доски</button><button class="gear tab ru" data-r="proj">Проекторы</button><button class="gear tab ru" data-r="ac">Кондиционеры</button></div><div class="trow"><button class="gear tab ru" data-r="scripts">Сценарии</button><button class="gear tab ru" data-r="touch">Тачпад</button><button class="gear tab ru" data-r="lib">Библиотека</button><button class="gear tab ctab ru" data-r="color">Цвет</button></div></nav>
   <div id="boards"><div class="brands" id="boardChips" aria-label="Доска"></div></div>
   <div id="proj"><div class="brands" id="brands" aria-label="Марка проектора"></div>
     <p class="projnote">Выключение: нажмите POWER два раза — проектор спрашивает подтверждение.</p></div>
@@ -778,6 +790,7 @@ html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%
   <section class="acp" id="ac" aria-label="Кондиционер"></section>
   <section class="scp" id="scripts" aria-label="Сценарии"></section>
   <section class="hidp" id="touch" aria-label="Тачпад"></section>
+  <section class="libp" id="lib" aria-label="Библиотека"></section>
   <section class="cp" id="cpanel" aria-label="Цвет"></section>
   <div class="status" id="status" role="status" aria-live="polite"></div>
 </div>
@@ -980,6 +993,8 @@ const httpTx = {
   repeat(hex) { return tasmota('IRSend {"Protocol":"NEC","Bits":32,"Data":"0x' + hex + '","Repeat":1}'); },
   /** Кадр другого протокола целиком: IRSend {"Protocol":…,"Bits":…,"Data":"0x…"}. */
   proto(protocol, bits, hex) { return tasmota('IRSend {"Protocol":"' + protocol + '","Bits":' + bits + ',"Data":"0x' + hex + '"}'); },
+  /** Сырой паттерн мкс: IRSend 0,<частота>,d1,d2,… */
+  rawir(freq, dur) { return tasmota('IRSend 0,' + Math.round(freq) + ',' + dur.map(Math.round).join(',')); },
 };
 
 /* ---------- Кондиционеры Haier (перенос 1:1 с Android Haier.kt) ----------
@@ -1511,7 +1526,7 @@ chipRow(boardChips, ['IRBIS', 'MocTec'], i => {
 function syncTabs() {
   // «Цвет» есть во всех темах
   document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.r === tab));
-  ['boards', 'proj', 'ac', 'scripts', 'touch'].forEach(k => document.body.classList.toggle(k, tab === k));
+  ['boards', 'proj', 'ac', 'scripts', 'touch', 'lib'].forEach(k => document.body.classList.toggle(k, tab === k));
   // сетка в 3 колонки: у проекторов и у полного пульта MocTec
   document.body.classList.toggle('grid3', tab === 'proj' || (tab === 'boards' && remote === 'moc'));
   document.body.classList.toggle('ctab', tab === 'color');
@@ -1522,6 +1537,7 @@ function syncTabs() {
   if (tab === 'ac') { document.querySelector('.id').textContent = 'кондиционер :: Haier :: ' + Haier.MODELS[ac.model]; acRefresh(); }
   else if (tab === 'scripts') document.querySelector('.id').textContent = 'сценарий :: ' + scripts[scriptIdx].name;
   else if (tab === 'touch') { document.querySelector('.id').textContent = 'тачпад :: krisa37 HID :: ' + hidStatusText(); hidAuto(); }
+  else if (tab === 'lib') { document.querySelector('.id').textContent = 'библиотека :: Flipper-IRDB'; window.libReady && libRender(); }
   else if (tab !== 'color') document.querySelector('.id').textContent = REMOTES[remote].id;
   if (tab !== 'touch' && window.hidLastTab === 'touch') hidReleaseAll();   // ушли с «Тачпада» — отпустить зажатое
   window.hidLastTab = tab;
@@ -1555,6 +1571,7 @@ function buildGrid(reveal) {
 document.querySelectorAll('#tabs .tab').forEach(t => t.addEventListener('click', () => {
   if (tab === t.dataset.r) return;
   if (t.dataset.r === 'color') { tab = 'color'; renderPanel(); syncTabs(); return; }
+  if (t.dataset.r === 'lib') { tab = 'lib'; syncTabs(); return; }
   topTab = t.dataset.r;
   try { localStorage.setItem('krisa-remote', topTab); } catch {}
   if (topTab === 'ac' || topTab === 'scripts' || topTab === 'touch') { tab = topTab; syncTabs(); return; }
@@ -2414,7 +2431,7 @@ window.irxReady = true;
    INFO (read + notify): «krisa37-hid <версия> usb=<0|1> auth=<ok|need|denied>». */
 const HID = {
   SVC: '6b7e0001-3a1f-4c7e-9d2a-6b72697361a0', RX: '6b7e0002-3a1f-4c7e-9d2a-6b72697361a0', INFO: '6b7e0003-3a1f-4c7e-9d2a-6b72697361a0',
-  dev: null, rx: null, info: null, state: 'off', usb: true, auth: '', q: Promise.resolve(), tried: false, sticky: 0, led: '', scr: false,
+  dev: null, rx: null, info: null, state: 'off', usb: true, auth: '', q: Promise.resolve(), tried: false, sticky: 0, led: '', scr: false, mbtn: 0,
   ledSt: { mode: 0, r: 0, g: 64, b: 255, bright: 40 },   // светодиод донгла: режим, цвет, яркость (хранится)
 };
 try { const v = JSON.parse(localStorage.getItem('krisa-hid-led') || 'null'); if (v) for (const k in HID.ledSt) if (Number.isFinite(v[k])) HID.ledSt[k] = Math.max(0, Math.min(k === 'mode' ? 4 : 255, v[k] | 0)); } catch {}
@@ -2484,8 +2501,9 @@ async function hidConnect() {
 /** Отпустить всё ([0x06]) и снять подсветку залипших модификаторов — при отключении, уходе с вкладки и сворачивании. */
 function hidReleaseAll() {
   if (HID.state === 'on' && HID.rx) hidSend([0x06]);
-  HID.sticky = 0; hidStickyRender();
-  document.querySelectorAll('#touch .hkeys .on').forEach(b => b.classList.remove('on'));
+  HID.sticky = 0; HID.mbtn = 0; hidStickyRender();
+  document.querySelectorAll('#touch .hkeys .on, #touch .hcombos .on').forEach(b => b._clr ? b._clr() : b.classList.remove('on'));
+  document.querySelectorAll('#touch .hmbtn button.on').forEach(b => b.classList.remove('on'));
 }
 function hidStickyRender() { document.querySelectorAll('#touch .hmods button[data-m]').forEach(b => b.classList.toggle('on', !!(HID.sticky & +b.dataset.m))); }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') hidReleaseAll(); });
@@ -2526,13 +2544,27 @@ function hidText(text) {
 (function buildTouch() {
   const box = $('touch');
   box.innerHTML = '<div class="hrow"><span class="hst"></span><button class="gear tab acb hcon"></button></div><div class="brands hsub"></div><div class="hpad">'
+    + '<div class="srow hdrawrow"></div>'
     + '<div class="tp" aria-label="Тачпад"><span>один палец — курсор · касание — клик · два пальца — прокрутка и правый клик · удержание — перетащить</span></div>'
-    + '<div class="srow hbtn"></div><div class="hsens"></div>'
+    + '<div class="srow hbtn"></div><div class="srow hmbtn"></div><div class="hsens"></div>'
     + '<div class="srow htxt"><input type="text" class="hin" placeholder="⌨ печатать…" autocomplete="off" spellcheck="false"></div><div class="srow hlang"></div>'
     + '<div class="srow hmods"></div><div class="hkeys"></div><p class="xl">мои сочетания</p><div class="hkeys hcombos"></div></div><div class="hled" hidden></div><div class="hscr" hidden></div><div class="htv" hidden></div><a class="hflash" href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
   box.querySelector('.hcon').addEventListener('click', () => HID.state === 'on' ? hidDisconnect() : hidConnect());
   // клики Л / С / П
   [['[ Л ]', 1], ['[ С ]', 4], ['[ П ]', 2]].forEach(([l, m]) => sBtn(box.querySelector('.hbtn'), l, () => hidClick(m)));
+  // залипающие кнопки мыши: касание фиксирует кнопку (buttons-маска держится), повторное — отпускает; с движением = перетаскивание
+  const mbRender = () => document.querySelectorAll('#touch .hmbtn button[data-mb]').forEach(x => x.classList.toggle('on', !!(HID.mbtn & +x.dataset.mb)));
+  [['⬇Л', 1], ['⬇С', 4], ['⬇П', 2]].forEach(([l, m]) => {
+    const b = document.createElement('button'); b.className = 'gear tab acb'; b.textContent = l; b.dataset.mb = m;
+    b.addEventListener('click', () => { const nm = HID.mbtn ^ m; if (hidSend([0x02, nm])) { HID.mbtn = nm; mbRender(); } });
+    box.querySelector('.hmbtn').appendChild(b);
+  });
+  // «рисовать»: касание поля сразу зажимает левую кнопку и двигает, при отпускании — отпускает (для досок/графредакторов)
+  let drawOn = false;
+  const drawBtn = document.createElement('button'); drawBtn.className = 'gear tab acb';
+  const drawUpd = () => { drawBtn.textContent = btnLabel(drawOn ? '[ ✎ рисовать: вкл ]' : '[ ✎ рисовать ]'); drawBtn.classList.toggle('on', drawOn); };
+  drawBtn.addEventListener('click', () => { drawOn = !drawOn; drawUpd(); }); drawUpd();
+  box.querySelector('.hdrawrow').appendChild(drawBtn);
   // чувствительность
   let sens = 1.2;
   try { const v = parseFloat(localStorage.getItem('krisa-hid-sens')); if (v >= 0.4 && v <= 3) sens = v; } catch {}
@@ -2562,17 +2594,20 @@ function hidText(text) {
     ['F5', 0, 0x3E], ['Shift+F5', 2, 0x3E], ['PgUp', 0, 0x4B], ['PgDn', 0, 0x4E], ['Home', 0, 0x4A], ['End', 0, 0x4D], ['Win+D', 8, 0x07], ['Ctrl+S', 1, 0x16]];
   /* Быстрые клавиши «как настоящие» (1.34): палец на кнопке — KEYDOWN [0x05, mods, code], убран / ушёл с кнопки / отмена — KEYUP [0x06, mods, code].
      Короткое нажатие = обычное нажатие, удержание = клавиша зажата (стрелки и ⌫ повторяет система). Кнопка подсвечена, пока зажата. */
+  /* Короткое касание — обычное нажатие (нажал-отпустил). Долгое (500 мс) — «зажать» клавишу (KEYDOWN, подсветка);
+     повторное касание зажатой — отпустить (KEYUP). Несколько клавиш держатся одновременно (W+A и т.п.). */
   const holdKey = (b, get) => {
-    let held = null;
-    const up = () => { if (!held) return; hidSend([0x06, held[0], held[1]]); held = null; b.classList.remove('on'); };
+    let held = null, longT = null, consumed = false;
+    b._clr = () => { held = null; b.classList.remove('on'); };   // сброс подсветки без отправки (для «отпустить всё»)
     b.addEventListener('pointerdown', e => {
       if (e.button > 0 || !get()) return;
-      b.releasePointerCapture?.(e.pointerId);   // чтобы уход пальца с кнопки давал pointerleave
-      const [m, c] = get();
-      if (hidSend([0x05, m, c])) { held = [m, c]; b.classList.add('on'); }
+      consumed = false;
+      if (held) { hidSend([0x06, held[0], held[1]]); held = null; b.classList.remove('on'); consumed = true; return; }
+      longT = setTimeout(() => { const g = get(); if (g && hidSend([0x05, g[0], g[1]])) { held = g; b.classList.add('on'); consumed = true; navigator.vibrate?.(15); } }, 500);
     });
-    ['pointerup', 'pointercancel', 'pointerleave', 'lostpointercapture'].forEach(n => b.addEventListener(n, up));
-    b.addEventListener('click', e => { if (e.detail === 0 && get()) { const [m, c] = get(); hidKey(m, c); } });   // с клавиатуры — обычное нажатие
+    b.addEventListener('pointerup', () => { clearTimeout(longT); if (!consumed && !held) { const g = get(); if (g) hidKey(g[0], g[1]); } });
+    ['pointercancel', 'pointerleave'].forEach(n => b.addEventListener(n, () => clearTimeout(longT)));
+    b.addEventListener('click', e => { if (e.detail === 0 && get()) { const g = get(); hidKey(g[0], g[1]); } });   // с клавиатуры — обычное нажатие
     b.addEventListener('contextmenu', e => e.preventDefault());
   };
   const kg = box.querySelector('.hkeys');
@@ -2590,7 +2625,7 @@ function hidText(text) {
     });
     sticky.appendChild(b);
   });
-  sBtn(sticky, '[ отпустить всё ]', () => { if (hidSend([0x06])) { HID.sticky = 0; hidStickyRender(); } }).classList.add('rel');
+  sBtn(sticky, '[ отпустить всё ]', () => hidReleaseAll()).classList.add('rel');
 
   /* «Мои сочетания»: сетка 4 колонки, работают как быстрые клавиши (зажатие — пока палец на кнопке).
      «изменить» — режим правки: касание сочетания открывает «Переименовать / Удалить». Хранение: [{n, m, k}]. */
@@ -2655,7 +2690,7 @@ function hidText(text) {
   /* Поле-тачпад. Один палец — курсор (× чувствительность × ускорение по скорости, не чаще раза в 15 мс, дробные остатки копятся);
      короткое касание — левый клик; касание двумя пальцами — правый; два пальца вверх/вниз — прокрутка; удержание 500 мс и движение — перетаскивание. */
   const tp = box.querySelector('.tp'), pts = new Map();
-  let accX = 0, accY = 0, accW = 0, last = 0, flushT = null, t0 = 0, moved = 0, maxPts = 0, dragging = false, holdT = null, lastY2 = null;
+  let accX = 0, accY = 0, accW = 0, last = 0, flushT = null, t0 = 0, moved = 0, maxPts = 0, dragging = false, drawing = false, holdT = null, lastY2 = null;
   const flush = () => {
     flushT = null; last = performance.now();
     const dx = Math.trunc(accX), dy = Math.trunc(accY), w = Math.trunc(accW);
@@ -2668,8 +2703,9 @@ function hidText(text) {
     tp.setPointerCapture?.(e.pointerId);
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now() });
     if (pts.size === 1) {
-      t0 = performance.now(); moved = 0; maxPts = 1; dragging = false;
-      holdT = setTimeout(() => { if (moved < 8 && pts.size === 1) { dragging = true; tp.classList.add('drag'); navigator.vibrate?.(20); hidSend([0x02, 1]); } }, 500);
+      t0 = performance.now(); moved = 0; maxPts = 1; dragging = false; drawing = false;
+      if (drawOn) { drawing = true; tp.classList.add('drag'); hidSend([0x02, 1 | HID.mbtn]); }
+      else holdT = setTimeout(() => { if (moved < 8 && pts.size === 1) { dragging = true; tp.classList.add('drag'); navigator.vibrate?.(20); hidSend([0x02, 1 | HID.mbtn]); } }, 500);
     } else { maxPts = Math.max(maxPts, pts.size); clearTimeout(holdT); lastY2 = avgY(); }
   });
   tp.addEventListener('pointermove', e => {
@@ -2689,7 +2725,8 @@ function hidText(text) {
     if (pts.size) { lastY2 = avgY(); return; }
     clearTimeout(holdT);
     const short = performance.now() - t0 < 280 && moved < 10;
-    if (dragging) { dragging = false; tp.classList.remove('drag'); flush(); hidSend([0x02, 0]); }
+    if (drawing) { drawing = false; tp.classList.remove('drag'); flush(); hidSend([0x02, HID.mbtn]); }
+    else if (dragging) { dragging = false; tp.classList.remove('drag'); flush(); hidSend([0x02, HID.mbtn]); }
     else if (short) hidClick(maxPts >= 2 ? 2 : 1);
     accW = 0;
   };
@@ -2988,6 +3025,122 @@ function hidText(text) {
   hidRender();
 })();
 
+
+/* ---------- Вкладка «Библиотека»: тысячи ИК-пультов (Flipper-IRDB) ----------
+   index.json = {cats:{Категория:[бренды]}}, <Категория>/<Бренд>.json = [{m:модель,b:[кнопки]}].
+   Кнопка parsed {n,p,a,c} разворачивается в тайминги мкс, raw {n,r,f} шлётся как есть — через текущий передатчик. */
+const LIB_BASE = new URL('lib/', location.href).href;   // рядом со страницей: на сайте — …/irbis/lib/
+// байты из hex младшим первым: "0700" → [0x07, 0x00]
+const libBytes = h => { const o = []; h = (h || '').replace(/[^0-9a-fA-F]/g, ''); for (let i = 0; i < h.length; i += 2) o.push(parseInt(h.slice(i, i + 2), 16) || 0); return o; };
+/** NEC-семейство: заголовок, байты (младший бит вперёд, mark+space 1690/560), хвост. */
+function libNecLike(bytes, hdrM, hdrS) {
+  const d = [hdrM, hdrS];
+  for (const b of bytes) for (let i = 0; i < 8; i++) { d.push(560, (b >> i) & 1 ? 1690 : 560); }
+  d.push(560);
+  return d;
+}
+/** SIRC: заголовок 2400/600, биты младшим вперёд (mark 1200/600 + space 600), без хвоста. */
+function libSirc(cmd, addr, ext, addrBits, extBits) {
+  const d = [2400, 600], bit = v => { d.push(v ? 1200 : 600, 600); };
+  for (let i = 0; i < 7; i++) bit((cmd >> i) & 1);
+  for (let i = 0; i < addrBits; i++) bit((addr >> i) & 1);
+  for (let i = 0; i < extBits; i++) bit((ext >> i) & 1);
+  return d;
+}
+/** parsed-кнопка → {dur (мкс), freq} или null, если протокол неизвестен. */
+function libParsed(btn) {
+  const a = libBytes(btn.a), c = libBytes(btn.c), p = (btn.p || '').toLowerCase();
+  const a0 = a[0] || 0, a1 = a[1] || 0, c0 = c[0] || 0, inv = x => x ^ 0xFF;
+  if (p === 'nec') return { dur: libNecLike([a0, inv(a0), c0, inv(c0)], 9000, 4500), freq: 38000 };
+  if (p === 'necext') return { dur: libNecLike([a0, a1, c0, inv(c0)], 9000, 4500), freq: 38000 };
+  if (p === 'samsung32') return { dur: libNecLike([a0, a0, c0, inv(c0)], 4500, 4500), freq: 38000 };
+  if (p === 'sirc') return { dur: libSirc(c0, a0, 0, 5, 0), freq: 40000 };
+  if (p === 'sirc15') return { dur: libSirc(c0, a0, 0, 8, 0), freq: 40000 };
+  if (p === 'sirc20') return { dur: libSirc(c0, a0, a1, 5, 8), freq: 40000 };
+  return null;
+}
+/** Отправить сырой паттерн мкс через текущий передатчик (как AC/Haier). */
+function libSendRaw(dur, freq, name) {
+  let p = null;
+  try {
+    if (settings.mode === 'http') p = httpTx.rawir(freq, dur);
+    else audioTx.raw('lib ' + dur.join(','), dur);
+    status('> tx ' + name + ' [sent]');
+  } catch (e) { status(e.message, 'err'); return; }
+  if (p && p.catch) p.catch(e => status(e.message === 'Failed to fetch' ? 'Модуль не отвечает' : e.message, 'err'));
+}
+function libSendButton(btn) {
+  if (btn.r && btn.r.length) { libSendRaw(btn.r, btn.f || 38000, btn.n); return; }
+  const e = libParsed(btn);
+  if (!e) { status('> протокол «' + btn.p + '» пока не поддержан', 'err'); return; }
+  libSendRaw(e.dur, e.freq, btn.n);
+  if (e.freq === 40000) setTimeout(() => libSendRaw(e.dur, e.freq, btn.n), 25);   // SIRC — дважды, как у Sony
+}
+
+const libCache = new Map();
+async function libFetch(path) {
+  if (libCache.has(path)) return libCache.get(path);
+  const r = await fetch(LIB_BASE + path, { cache: 'force-cache' });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json(); libCache.set(path, j); return j;
+}
+
+const LP = $('lib');
+const libSt = { cat: '', brand: '', model: '', q: '' };
+try { Object.assign(libSt, JSON.parse(localStorage.getItem('krisa-lib') || '{}')); } catch {}
+let libIndex = null, libBrandData = null;
+const libSave = () => { try { localStorage.setItem('krisa-lib', JSON.stringify(libSt)); } catch {} };
+
+function libChips(box, items, cur, pick) {
+  box.textContent = '';
+  items.forEach(it => { const b = document.createElement('button'); b.className = 'gear tab acb' + (it === cur ? ' on' : ''); b.textContent = it; b.addEventListener('click', () => pick(it)); box.appendChild(b); });
+}
+async function libRender() {
+  LP.innerHTML = '<p class="projnote">Тысячи ИК-пультов. Категория → бренд → модель → кнопка. Данные загружаются из сети при первом открытии.</p><div class="libstat"></div><div class="libcats brands"></div><input type="text" class="libq" placeholder="поиск бренда/модели…" autocomplete="off" spellcheck="false"><div class="libbrands brands"></div><div class="libmodels brands"></div><div class="libkeys"></div>';
+  const st = LP.querySelector('.libstat');
+  LP.querySelector('.libq').value = libSt.q;
+  LP.querySelector('.libq').addEventListener('input', e => { libSt.q = e.target.value; libSave(); libLists(); });
+  if (!libIndex) {
+    st.textContent = 'загрузка списка…';
+    try { libIndex = await libFetch('index.json'); } catch (e) { st.textContent = 'не удалось загрузить библиотеку (нужна сеть). ' + e.message; return; }
+  }
+  st.textContent = '';
+  const cats = Object.keys(libIndex.cats || {});
+  if (!cats.includes(libSt.cat)) libSt.cat = cats[0] || '';
+  libChips(LP.querySelector('.libcats'), cats, libSt.cat, c => { libSt.cat = c; libSt.brand = ''; libSt.model = ''; libBrandData = null; libSave(); libRender(); });
+  libLists();
+}
+async function libLists() {
+  const bbox = LP.querySelector('.libbrands'), mbox = LP.querySelector('.libmodels'), kbox = LP.querySelector('.libkeys');
+  if (!libIndex || !libSt.cat) return;
+  const q = libSt.q.trim().toLowerCase();
+  const brands = (libIndex.cats[libSt.cat] || []).filter(b => !q || b.toLowerCase().includes(q));
+  libChips(bbox, brands, libSt.brand, async b => { libSt.brand = b; libSt.model = ''; libBrandData = null; libSave(); await libLoadBrand(); });
+  mbox.textContent = ''; kbox.textContent = '';
+  if (libSt.brand) await libLoadBrand();
+}
+async function libLoadBrand() {
+  const mbox = LP.querySelector('.libmodels'), kbox = LP.querySelector('.libkeys'), st = LP.querySelector('.libstat');
+  if (!libBrandData) {
+    st.textContent = 'загрузка «' + libSt.brand + '»…';
+    try { libBrandData = await libFetch(encodeURIComponent(libSt.cat) + '/' + encodeURIComponent(libSt.brand) + '.json'); } catch (e) { st.textContent = 'не удалось загрузить бренд. ' + e.message; return; }
+    st.textContent = '';
+  }
+  const q = libSt.q.trim().toLowerCase();
+  const models = libBrandData.map(m => m.m).filter(m => !q || m.toLowerCase().includes(q) || libSt.brand.toLowerCase().includes(q));
+  if (!models.includes(libSt.model)) libSt.model = models[0] || '';
+  libChips(mbox, models, libSt.model, m => { libSt.model = m; libSave(); libKeys(); });
+  libKeys();
+}
+function libKeys() {
+  const kbox = LP.querySelector('.libkeys');
+  kbox.textContent = '';
+  const m = (libBrandData || []).find(x => x.m === libSt.model);
+  if (!m) return;
+  m.b.forEach(btn => { const b = document.createElement('button'); b.className = 'gear tab acb'; b.textContent = btn.n || '?'; b.addEventListener('click', () => libSendButton(btn)); kbox.appendChild(b); });
+}
+
+window.libReady = true;
 buildGrid(false);
 applyColor();
 
@@ -3385,7 +3538,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.38', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.40', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);
