@@ -19,6 +19,10 @@
  *   0x09 CONSUMER[0x09, lo, hi]              — медиа-клавиша ТВ/телефона (16-битный Consumer usage)
  *   0x0A GAMEPAD [0x0A, btnLo, btnHi, lx, ly, rx, ry, hat] — игровой пульт: 16 кнопок (маска),
  *                2 стика (int8 −127..127), hat 0 центр / 1 вверх … 8 влево-вверх. Доска видит USB-геймпад.
+ *   Прошивка по воздуху (OTA) с телефона: 0x30 начать [0x30, размер 4 байта LE], 0x31 <кусок> данные (≤243 Б),
+ *                0x32 завершить (проверить и перезагрузиться), 0x33 отменить. Образ — app-раздел (krisa37-hid-app.bin).
+ *                Нужна привязка (auth). В INFO — «chip=s3 ota=go|ok|err». Пишется в соседний OTA-раздел, при сбое
+ *                плата остаётся на старой прошивке.
  *   Скрипт (Ducky/макрос): 0x20 начать приём, 0x21 <байткод…> дописать, 0x22 <auto 0|1> сохранить в память,
  *                0x23 выполнить сохранённый сейчас, 0x24 стереть. Байткод: 01 len текст | 02 mods key нажать |
  *                03 lo hi пауза мс | 04 dx dy мышь | 05 mask count клик | 08 wheel колесо. В INFO — «scr=1» если сохранён.
@@ -45,9 +49,15 @@
 #include <BLEServer.h>
 #include <BLE2902.h>
 #include <Preferences.h>
+#include "esp_ota_ops.h"
 #include "types.h"
 
-#define VERSION "1.7"
+#define VERSION "1.8"
+#if defined(CONFIG_IDF_TARGET_ESP32C3)
+#define CHIP "c3"
+#else
+#define CHIP "s3"
+#endif
 #define SERVICE_UUID "6b7e0001-3a1f-4c7e-9d2a-6b72697361a0"
 #define RX_UUID      "6b7e0002-3a1f-4c7e-9d2a-6b72697361a0"
 #define INFO_UUID    "6b7e0003-3a1f-4c7e-9d2a-6b72697361a0"
@@ -109,6 +119,13 @@ bool scriptAuto = false;
 bool scriptRan = false;
 volatile bool scriptRunning = false;
 
+/* Прошивка по воздуху (OTA): пишем в соседний app-раздел, по завершении — перезагрузка. */
+esp_ota_handle_t otaHandle = 0;
+const esp_partition_t *otaPart = nullptr;
+bool otaActive = false;
+uint32_t otaSize = 0, otaRecv = 0;
+int otaState = 0;   // 0 нет, 1 идёт, 2 успех, 3 ошибка
+
 uint32_t ledNow = 0xFFFFFFFF;
 void led(uint8_t r, uint8_t g, uint8_t b) {
   uint32_t c = (r << 16) | (g << 8) | b;
@@ -147,8 +164,10 @@ bool userLed(uint32_t t) {
 
 void publishInfo() {
   if (!info) return;
+  const char *ota = otaState == 1 ? "go" : otaState == 2 ? "ok" : otaState == 3 ? "err" : "0";
   String s = String("krisa37-hid ") + VERSION + " usb=" + (usbReady ? "1" : "0") + " auth=" +
-             (auth == AUTH_OK ? "ok" : auth == AUTH_DENIED ? "denied" : "need") + " led=rgb scr=" + (scriptLen > 0 ? "1" : "0");
+             (auth == AUTH_OK ? "ok" : auth == AUTH_DENIED ? "denied" : "need") + " led=rgb scr=" + (scriptLen > 0 ? "1" : "0") +
+             " chip=" + CHIP + " ota=" + ota;
   info->setValue(s.c_str());
   if (connected) info->notify();
 }
@@ -374,6 +393,36 @@ void handle(const Packet &p) {
         uint32_t btn = p.data[1] | (p.data[2] << 8);
         Gamepad.send((int8_t)p.data[3], (int8_t)p.data[4], (int8_t)p.data[5], (int8_t)p.data[6], 0, 0, p.data[7], btn);
       }
+      break;
+    case 0x30: {   // OTA: начать приём прошивки в соседний раздел
+      if (p.len >= 5) {
+        otaSize = (uint32_t)p.data[1] | ((uint32_t)p.data[2] << 8) | ((uint32_t)p.data[3] << 16) | ((uint32_t)p.data[4] << 24);
+        otaPart = esp_ota_get_next_update_partition(NULL);
+        otaRecv = 0;
+        if (otaPart && esp_ota_begin(otaPart, otaSize ? otaSize : OTA_SIZE_UNKNOWN, &otaHandle) == ESP_OK) { otaActive = true; otaState = 1; }
+        else { otaActive = false; otaState = 3; }
+        LOG("ota begin %u -> %s\n", otaSize, otaState == 1 ? "ok" : "fail");
+        publishInfo();
+      }
+      break;
+    }
+    case 0x31:     // OTA: кусок данных
+      if (otaActive && p.len > 1) {
+        if (esp_ota_write(otaHandle, p.data + 1, p.len - 1) == ESP_OK) otaRecv += p.len - 1;
+        else { esp_ota_abort(otaHandle); otaActive = false; otaState = 3; publishInfo(); }
+      }
+      break;
+    case 0x32:     // OTA: завершить, проверить и перезагрузиться
+      if (otaActive) {
+        otaActive = false;
+        esp_err_t e = esp_ota_end(otaHandle);
+        if (e == ESP_OK && esp_ota_set_boot_partition(otaPart) == ESP_OK) {
+          otaState = 2; LOG("ota ok, restart\n"); publishInfo(); delay(400); esp_restart();
+        } else { otaState = 3; LOG("ota end err %d\n", (int)e); publishInfo(); }
+      }
+      break;
+    case 0x33:     // OTA: отмена
+      if (otaActive) { esp_ota_abort(otaHandle); otaActive = false; otaState = 0; publishInfo(); }
       break;
     case 0x20: scriptRecv = 0; break;
     case 0x21: { size_t c = p.len - 1; if (scriptRecv + c <= SCRIPT_MAX) { memcpy(scriptBuf + scriptRecv, p.data + 1, c); scriptRecv += c; } break; }

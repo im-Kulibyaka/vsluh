@@ -26,6 +26,7 @@ jobs:
             --export-binaries --output-dir out firmware/krisa37-hid
           ls -la out
           cp out/krisa37-hid.ino.merged.bin krisa37-hid.bin
+          cp out/krisa37-hid.ino.bin krisa37-hid-app.bin        # только app-раздел — для прошивки по воздуху (OTA)
       - name: Build ESP32-S3 N8R8/N16R8 variant (octal PSRAM — иначе такие платы перезагружаются по кругу)
         run: |
           arduino-cli compile --fqbn "esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default,FlashSize=4M,PartitionScheme=default,PSRAM=opi" \
@@ -44,6 +45,7 @@ jobs:
           arduino-cli compile --fqbn "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashSize=4M,PartitionScheme=default" \
             --export-binaries --output-dir out-c3 firmware/krisa37-hid-c3
           cp out-c3/krisa37-hid-c3.ino.merged.bin krisa37-hid-c3.bin
+          cp out-c3/krisa37-hid-c3.ino.bin krisa37-hid-c3-app.bin
       - name: Build ESP32-S3 Bluetooth-remote variant (BT HID, same code as C3)
         run: |
           mkdir -p s3bt/krisa37-hid-s3bt
@@ -52,6 +54,7 @@ jobs:
           arduino-cli compile --fqbn "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=4M,PartitionScheme=default,PSRAM=opi" \
             --export-binaries --output-dir out-s3bt s3bt/krisa37-hid-s3bt
           cp out-s3bt/krisa37-hid-s3bt.ino.merged.bin krisa37-hid-s3bt.bin
+          cp out-s3bt/krisa37-hid-s3bt.ino.bin krisa37-hid-s3bt-app.bin
       - uses: actions/upload-artifact@v4
         with:
           name: krisa37-hid
@@ -61,3 +64,6 @@ jobs:
             krisa37-hid-c3.bin
             krisa37-hid-s3bt.bin
             krisa37-hid-opi.bin
+            krisa37-hid-app.bin
+            krisa37-hid-c3-app.bin
+            krisa37-hid-s3bt-app.bin
