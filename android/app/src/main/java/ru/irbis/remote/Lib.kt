@@ -41,6 +41,20 @@ object Lib {
         }
     }
 
+    /** Скачать файл целиком (например, прошивку .bin). Бросает исключение при ошибке. */
+    fun getBytes(url: String): ByteArray {
+        val c = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"; connectTimeout = 10000; readTimeout = 30000
+            useCaches = false; setRequestProperty("Cache-Control", "no-cache")
+        }
+        try {
+            if (c.responseCode != 200) throw java.io.IOException("HTTP ${c.responseCode}")
+            return c.inputStream.use { it.readBytes() }
+        } finally {
+            c.disconnect()
+        }
+    }
+
     /* ---------- разбор JSON ---------- */
 
     /** index.json → категория → список брендов (порядок сохраняется). */
