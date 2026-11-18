@@ -155,16 +155,36 @@ const TL=new THREE.TextureLoader(); let loaded=0, total=0;
 const progress=()=>{ document.getElementById('fadeMsg').textContent=`Открываем двери… ${Math.round(loaded/Math.max(1,total)*100)}%`; };
 const tex=(url,srgb,rep=1)=>{ total++; const t=TL.load(url,()=>{ loaded++; progress(); },undefined,()=>{ loaded++; progress(); });
   t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(rep,rep); t.anisotropy=ANISO; if (srgb) t.colorSpace=THREE.SRGBColorSpace; return t; };
+const GRIME=`float gh3(vec3 p){ p=fract(p*.3183099+.1); p*=17.; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+float gvn(vec3 x){ vec3 i=floor(x), f=fract(x); f=f*f*(3.-2.*f);
+  return mix(mix(mix(gh3(i),gh3(i+vec3(1,0,0)),f.x),mix(gh3(i+vec3(0,1,0)),gh3(i+vec3(1,1,0)),f.x),f.y),mix(mix(gh3(i+vec3(0,0,1)),gh3(i+vec3(1,0,1)),f.x),mix(gh3(i+vec3(0,1,1)),gh3(i+vec3(1,1,1)),f.x),f.y),f.z); }
+float gfb(vec3 p){ return gvn(p)*.5+gvn(p*2.1)*.3+gvn(p*4.3)*.2; }
+`;
+// грязь, сырость и потёки: ломают повтор текстур на больших поверхностях
+function grime(mat, amt, streak, wet){
+  mat.onBeforeCompile=sh=>{
+    sh.vertexShader='varying vec3 vWp;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vWp=(modelMatrix*vec4(transformed,1.)).xyz;');
+    sh.fragmentShader='varying vec3 vWp; float gD=1.;\n'+GRIME+sh.fragmentShader
+      .replace('#include <map_fragment>',`#include <map_fragment>
+        { float g1=gfb(vWp*.16), g2=gvn(vec3(vWp.x*1.6,vWp.y*.07,vWp.z*1.6)), g3=gvn(vWp*.035);
+          gD=mix(1.,.5+.75*g1,${amt.toFixed(2)})*mix(1.,.7+.45*g3,.6);
+          gD*=mix(1.,.55+.6*g2,${streak.toFixed(2)}*smoothstep(14.,2.,vWp.y));
+          diffuseColor.rgb*=gD; }`)
+      .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+        roughnessFactor*=mix(1.,clamp(.45+.7*gD,0.,1.),${wet.toFixed(2)});`);
+  };
+  return mat;
+}
 function pbr(name, rep, o={}){
   const arm=tex(`tex/${name}_arm.jpg`,false,rep);
   return new THREE.MeshStandardMaterial({ map:tex(`tex/${name}.jpg`,true,rep), normalMap:tex(`tex/${name}_n.jpg`,false,rep), roughnessMap:arm, aoMap:arm, aoMapIntensity:.85,
     roughness:1, metalness:0, color:o.color||'#ffffff', normalScale:new THREE.Vector2(o.n??1.2,o.n??1.2), envMapIntensity:o.env??1 });
 }
 const M={
-  wall:pbr('plastered_stone_wall',.28,{color:'#aab3bb'}),
-  stone:pbr('castle_wall_varriation',.35,{color:'#8d949a'}),
-  floor:pbr('old_wood_floor',.42,{color:'#a9a49c'}),
-  wood:pbr('weathered_planks',.6,{color:'#8b7f73'}),
+  wall:grime(pbr('plastered_stone_wall',.28,{color:'#b2bbc3'}),.6,.8,0),
+  stone:grime(pbr('castle_wall_varriation',.35,{color:'#8d949a'}),.5,.3,0),
+  floor:grime(pbr('old_wood_floor',.42,{color:'#aca79f'}),.55,0,.6),
+  wood:grime(pbr('weathered_planks',.6,{color:'#8b7f73'}),.35,0,0),
   dark:new THREE.MeshStandardMaterial({ color:'#16181c', roughness:.9 }),
   armor:new THREE.MeshStandardMaterial({ color:'#2c2e33', roughness:.5, metalness:.55 }),
   paper:new THREE.MeshStandardMaterial({ color:'#cfc6b2', roughness:.95, side:THREE.DoubleSide }),
@@ -239,43 +259,74 @@ box(3.2,.12,.26,M.wood,-3.3,1.9,-11.3,0,.3,1.1,.6); box(3.6,.12,.26,M.wood,-2.6,
 for (let i=0;i<46;i++){ const p=new THREE.Mesh(new THREE.PlaneGeometry(.22,.3),M.paper); const z=rnd(-10,6), x=rnd(-4.5,4.5)*(z>-4?.7:1);
   p.position.set(x,(z<-4.4&&Math.abs(x)<6.7?.91:.012)+rnd(0,.01),z); p.rotation.set(-Math.PI/2+rnd(-.08,.08),0,rnd(0,6.28)); add(p,false,true); }
 
-/* ---------- фигура в красном плаще (ткань рассчитывается при загрузке) ---------- */
+/* ---------- фигура: мантия, капюшон и красный плащ — всё из рассчитанной ткани ---------- */
 const FIG=new V3(.3,0,-1.6);
-(()=>{ const g=new THREE.Group();
-  const torso=new THREE.Mesh(new THREE.CapsuleGeometry(.2,.42,6,16),M.armor); torso.position.set(0,.98,-.02); torso.rotation.x=-.32;
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.12,24,16),M.armor); head.position.set(0,1.38,-.17);
-  const pauldL=new THREE.Mesh(new THREE.SphereGeometry(.13,16,12),M.armor), pauldR=pauldL.clone(); pauldL.position.set(-.21,1.2,-.06); pauldR.position.set(.21,1.2,-.06);
-  const thighL=new THREE.Mesh(new THREE.CapsuleGeometry(.09,.36,4,12),M.armor), thighR=thighL.clone(); thighL.position.set(-.12,.42,-.18); thighL.rotation.x=1.1; thighR.position.set(.12,.42,-.18); thighR.rotation.x=1.1;
-  const shinL=new THREE.Mesh(new THREE.CapsuleGeometry(.075,.36,4,12),M.armor), shinR=shinL.clone(); shinL.position.set(-.12,.1,.08); shinL.rotation.x=Math.PI/2; shinR.position.set(.12,.1,.08); shinR.rotation.x=Math.PI/2;
-  g.add(torso,head,pauldL,pauldR,thighL,thighR,shinL,shinR); g.traverse(o=>{ if (o.isMesh) o.castShadow=o.receiveShadow=true; });
-  g.position.copy(FIG); scene.add(g);
-  // ткань: верле-симуляция, плащ закреплён на плечах и стелется по полу назад
-  const NX=26, NY=62, R=.042, N=NX*NY, P=new Float32Array(N*3), Q=new Float32Array(N*3);
-  const sh=new V3(FIG.x,1.22,FIG.z-.02);
-  for (let j=0;j<NY;j++) for (let i=0;i<NX;i++){ const k=(j*NX+i)*3, u=(i/(NX-1)-.5), s=j*R;
-    const spread=1+Math.max(0,s-1.1)*1.1, x=sh.x+u*(.46+.7*Math.min(1,s/1.2))*spread;
-    let y=sh.y-s, z=sh.z+.18+s*.05; if (y<.03){ z+= -y; y=.03; }
-    P[k]=x+rnd(-.002,.002); P[k+1]=y; P[k+2]=z; }
-  Q.set(P);
-  const pinned=new Set([...Array(NX).keys()]);
-  const C=[]; const L=(a,b)=>{ const dx=P[a*3]-P[b*3], dy=P[a*3+1]-P[b*3+1], dz=P[a*3+2]-P[b*3+2]; C.push(a,b,Math.hypot(dx,dy,dz)); };
-  for (let j=0;j<NY;j++) for (let i=0;i<NX;i++){ const k=j*NX+i; if (i<NX-1) L(k,k+1); if (j<NY-1) L(k,k+NX); if (i<NX-1&&j<NY-1){ L(k,k+NX+1); L(k+1,k+NX); } if (j<NY-2) L(k,k+2*NX); }
-  const balls=[[0,.98,-.02,.27],[0,.62,.02,.3],[0,.25,.1,.26],[-.21,1.2,-.06,.16],[.21,1.2,-.06,.16]].map(([x,y,z,r])=>[x+FIG.x,y,z+FIG.z,r]);
-  for (let it=0; it<700; it++){
-    for (let n=0;n<N;n++){ if (pinned.has(n)) continue; const k=n*3;
-      for (let a=0;a<3;a++){ const v=(P[k+a]-Q[k+a])*.97; Q[k+a]=P[k+a]; P[k+a]+=v; }
-      P[k+1]-=9.8/3600; P[k+2]+=.15/3600*(P[k+1]<.1?1:0); }
-    for (let rep=0;rep<5;rep++){
-      for (let c=0;c<C.length;c+=3){ const a=C[c]*3, b=C[c+1]*3, r=C[c+2]; const dx=P[b]-P[a], dy=P[b+1]-P[a+1], dz=P[b+2]-P[a+2], d=Math.hypot(dx,dy,dz)||1e-6, f=(d-r)/d*.5;
-        const pa=pinned.has(C[c]), pb=pinned.has(C[c+1]); const fa=pa?0:(pb?2*f:f), fb=pb?0:(pa?2*f:f);
+function clothSim(P, NR, NC, wrap, pinned, balls, {iters=380, passes=5, bendK=.25, floorY=.012, wind=0}={}){
+  const N=NR*NC, Q=Float32Array.from(P), C=[], id=(i,j)=>i*NC+((j%NC)+NC)%NC;
+  const L=(a,b,k)=>{ C.push(a,b,Math.hypot(P[a*3]-P[b*3],P[a*3+1]-P[b*3+1],P[a*3+2]-P[b*3+2]),k); };
+  for (let i=0;i<NR;i++) for (let j=0;j<NC;j++){ const w=wrap||j<NC-1, w2=wrap||j<NC-2;
+    if (w) L(id(i,j),id(i,j+1),1); if (i<NR-1) L(id(i,j),id(i+1,j),1);
+    if (i<NR-1&&w){ L(id(i,j),id(i+1,j+1),1); L(id(i,j+1),id(i+1,j),1); }
+    if (w2) L(id(i,j),id(i,j+2),bendK); if (i<NR-2) L(id(i,j),id(i+2,j),bendK); }
+  const pin=new Uint8Array(N); pinned.forEach(n=>pin[n]=1);
+  for (let it=0; it<iters; it++){
+    for (let n=0;n<N;n++){ if (pin[n]) continue; const k=n*3;
+      for (let a=0;a<3;a++){ const v=(P[k+a]-Q[k+a])*.965; Q[k+a]=P[k+a]; P[k+a]+=v; }
+      P[k+1]-=9.8/3600; if (wind&&P[k+1]<.08) P[k+2]+=wind/3600; }
+    for (let rep=0;rep<passes;rep++){
+      for (let c=0;c<C.length;c+=4){ const ia=C[c], ib=C[c+1], a=ia*3, b=ib*3, r=C[c+2], kk=C[c+3];
+        const dx=P[b]-P[a], dy=P[b+1]-P[a+1], dz=P[b+2]-P[a+2], d=Math.hypot(dx,dy,dz)||1e-6, f=(d-r)/d*.5*kk;
+        const fa=pin[ia]?0:(pin[ib]?2*f:f), fb=pin[ib]?0:(pin[ia]?2*f:f);
         P[a]+=dx*fa; P[a+1]+=dy*fa; P[a+2]+=dz*fa; P[b]-=dx*fb; P[b+1]-=dy*fb; P[b+2]-=dz*fb; }
-      for (let n=0;n<N;n++){ if (pinned.has(n)) continue; const k=n*3;
-        for (const [bx,by,bz,br] of balls){ const dx=P[k]-bx, dy=P[k+1]-by, dz=P[k+2]-bz, d=Math.hypot(dx,dy,dz), rr=br+.025; if (d<rr){ const s=rr/(d||1e-6); P[k]=bx+dx*s; P[k+1]=by+dy*s; P[k+2]=bz+dz*s; } }
-        if (P[k+1]<.012){ P[k+1]=.012; Q[k]+=(P[k]-Q[k])*.7; Q[k+2]+=(P[k+2]-Q[k+2])*.7; } } }
+      for (let n=0;n<N;n++){ if (pin[n]) continue; const k=n*3;
+        for (let s=0;s<balls.length;s++){ const B=balls[s], dx=P[k]-B[0], dy=P[k+1]-B[1], dz=P[k+2]-B[2], d2=dx*dx+dy*dy+dz*dz, rr=B[3];
+          if (d2<rr*rr){ const d=Math.sqrt(d2)||1e-6, q=rr/d; P[k]=B[0]+dx*q; P[k+1]=B[1]+dy*q; P[k+2]=B[2]+dz*q; Q[k]+=(P[k]-Q[k])*.3; Q[k+2]+=(P[k+2]-Q[k+2])*.3; } }
+        if (P[k+1]<floorY){ P[k+1]=floorY; Q[k]+=(P[k]-Q[k])*.75; Q[k+2]+=(P[k+2]-Q[k+2])*.75; } } }
   }
-  const geo=new THREE.PlaneGeometry(1,1,NX-1,NY-1); geo.attributes.position.array.set(P); geo.computeVertexNormals();
-  const cape=new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color:'#b0101a', roughness:.72, sheen:1, sheenColor:new THREE.Color('#ff5a4a'), sheenRoughness:.45, side:THREE.DoubleSide }));
-  add(cape);
+  return P;
+}
+function clothGeo(P, NR, NC, wrap, us, vs){
+  const cols=wrap?NC+1:NC, pos=new Float32Array(NR*cols*3), uv=new Float32Array(NR*cols*2), idx=[];
+  for (let i=0;i<NR;i++) for (let j=0;j<cols;j++){ const s=i*NC+(j%NC), d=i*cols+j; pos.set(P.subarray(s*3,s*3+3),d*3); uv[d*2]=j/(cols-1)*us; uv[d*2+1]=i/(NR-1)*vs; }
+  for (let i=0;i<NR-1;i++) for (let j=0;j<cols-1;j++){ const a=i*cols+j, b=a+1, c=a+cols, d=c+1; idx.push(a,c,b, b,c,d); }
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setAttribute('uv',new THREE.BufferAttribute(uv,2)); g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+(()=>{
+  const W=(x,y,z,r)=>[FIG.x+x,y,FIG.z+z,r];
+  const seg=(a,b,r,n)=>[...Array(n)].map((_,i)=>{ const t=i/(n-1); return W(a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,r); });
+  // тело-каркас под тканью: стоит на коленях, голова склонена
+  const body=[ W(0,1.33,-.3,.115), W(0,1.12,-.17,.17), W(-.2,1.12,-.12,.12), W(.2,1.12,-.12,.12), W(0,.9,-.12,.21), W(0,.66,-.12,.22),
+    ...seg([-.13,.55,-.16],[-.13,.13,-.34],.11,4), ...seg([.13,.55,-.16],[.13,.13,-.34],.11,4),
+    ...seg([-.13,.09,-.34],[-.13,.08,.22],.085,5), ...seg([.13,.09,-.34],[.13,.08,.22],.085,5),
+    W(-.1,.78,-.38,.07), W(.1,.78,-.38,.07) ];
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.11,24,16), new THREE.MeshStandardMaterial({ color:'#0d0d0f', roughness:1 })); head.position.set(FIG.x,1.33,FIG.z-.3); add(head);
+  const linen=pbr('rough_linen',1,{color:'#46474d',n:1.4}); linen.side=THREE.DoubleSide; linen.sheen=0;
+  const robeMat=new THREE.MeshPhysicalMaterial({ map:linen.map, normalMap:linen.normalMap, roughnessMap:linen.roughnessMap, color:'#2e2c2c', roughness:1, sheen:.25, sheenColor:new THREE.Color('#4a4644'), sheenRoughness:.7, side:THREE.DoubleSide, normalScale:new THREE.Vector2(1.3,1.3) });
+  const velvet=pbr('velour_velvet',1,{n:1});
+  const capeMat=new THREE.MeshPhysicalMaterial({ normalMap:velvet.normalMap, roughnessMap:velvet.roughnessMap, color:'#a30d16', roughness:1, sheen:1, sheenColor:new THREE.Color('#ff5148'), sheenRoughness:.42, side:THREE.DoubleSide });
+  // мантия: трубка от шеи до пола
+  { const NR=44, NC=56, P=new Float32Array(NR*NC*3);
+    for (let i=0;i<NR;i++){ const t=i/(NR-1), r=.12+.56*Math.pow(t,1.1), y=1.24-1.5*t, cz=-.2+.18*t;
+      for (let j=0;j<NC;j++){ const a=j/NC*Math.PI*2, k=(i*NC+j)*3; P[k]=FIG.x+Math.sin(a)*r*1.05; P[k+1]=Math.max(.02,y); P[k+2]=FIG.z+cz+Math.cos(a)*r*(y<.02?1+(.02-y)*.8:1); } }
+    clothSim(P,NR,NC,true,[...Array(NC).keys()],body.map(b=>[b[0],b[1],b[2],b[3]+.02]),{iters:360});
+    add(new THREE.Mesh(clothGeo(P,NR,NC,true,6,4),robeMat)); }
+  // капюшон: открыт спереди, лежит на плечах
+  { const NR=18, NC=36, P=new Float32Array(NR*NC*3), hc=[FIG.x,1.35,FIG.z-.29];
+    for (let i=0;i<NR;i++){ const ph=(.12+i/(NR-1)*1.05)*Math.PI/2*1.5, r=.17+.02*i/NR;
+      for (let j=0;j<NC;j++){ const th=(.16+.68*j/(NC-1))*Math.PI*2, k=(i*NC+j)*3;   // 0 — лицо (−z), щель спереди
+        P[k]=hc[0]+Math.sin(ph)*Math.sin(th)*r; P[k+1]=hc[1]+Math.cos(ph)*r+.02; P[k+2]=hc[2]-Math.sin(ph)*Math.cos(th)*r+.03; } }
+    const pins=[...Array(NC*2).keys()];
+    clothSim(P,NR,NC,false,pins,[W(0,1.33,-.3,.15), ...body.slice(1,4).map(b=>[b[0],b[1],b[2],b[3]+.05])],{iters:300});
+    add(new THREE.Mesh(clothGeo(P,NR,NC,false,2,1.5),capeMat)); }
+  // красный плащ поверх: с плеч назад и по полу
+  { const NX=30, NY=64, R=.042, P=new Float32Array(NX*NY*3), sh=[FIG.x,1.2,FIG.z-.06];
+    for (let j=0;j<NY;j++) for (let i=0;i<NX;i++){ const k=(j*NX+i)*3, u=i/(NX-1)-.5, s=j*R;
+      const spread=1+Math.max(0,s-1.15)*1.25, a=u*3.5, rad=.3;
+      let x=sh[0]+Math.sin(a)*rad*(1+Math.min(1,s/1.2)*.5)*spread, y=sh[1]-s, z=sh[2]+Math.cos(a)*rad*.8+.04+s*.05;
+      if (y<.03){ z+=.03-y; y=.03; }
+      P[k]=x; P[k+1]=y; P[k+2]=z; }
+    clothSim(P,NY,NX,false,[...Array(NX).keys()],body.map(b=>[b[0],b[1],b[2],b[3]+.075]),{iters:420,wind:.12,floorY:.024});
+    add(new THREE.Mesh(clothGeo(P,NY,NX,false,2,4),capeMat)); }
 })();
 
 /* ---------- модели (Poly Haven, CC0) ---------- */
@@ -297,6 +348,12 @@ model('lantern_chandelier_01', r=>{ const b=new THREE.Box3().setFromObject(r), s
   const chain=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,12.2,6),M.armor); chain.position.y=-6.1; pivot.add(chain);
   pivot.rotation.set(.06,0,.08); r.rotation.set(.5,.3,.35); scene.add(pivot); hang.push(pivot); });
 const hang=[];
+model('WoodenChair_01', r=>{ fit(r,1.0); r.position.set(-1.7,0,-.3); r.rotation.set(Math.PI/2*.96,.6,0); r.position.y=.24; scene.add(r);
+  const r2=r.clone(); r2.rotation.set(0,2.4,0); r2.position.set(4.3,.9,-9.2); scene.add(r2); });
+model('brass_candleholders', r=>{ fit(r,.55); r.position.set(-.8,1.5,-10.2); scene.add(r); const r2=r.clone(); r2.position.set(1.9,1.5,-10.6); r2.rotation.y=1; scene.add(r2); });
+model('book_encyclopedia_set_01', r=>{ fit(r,.3); r.position.set(-2.4,.9,-6.6); r.rotation.y=.4; scene.add(r);
+  const r2=r.clone(); r2.position.set(1.2,0,1.0); r2.rotation.set(0,-.7,Math.PI/2); r2.position.y=.12; scene.add(r2);
+  const r3=r.clone(); r3.position.set(-4.6,.9,-12.6); r3.rotation.y=1.5; scene.add(r3); });
 
 /* ---------- свет ---------- */
 const sunDir=new V3(.22,.6,-.77).normalize();   // направление на источник света (за задней стеной, справа-сверху)
