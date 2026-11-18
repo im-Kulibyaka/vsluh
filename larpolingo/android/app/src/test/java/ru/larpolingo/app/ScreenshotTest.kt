@@ -27,6 +27,10 @@ class ScreenshotTest {
     fun shots() {
         val act = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         save(act.window.decorView, "main")
+        fun findScroll(v: View): android.widget.ScrollView? = if (v is android.widget.ScrollView) v else
+            (v as? android.view.ViewGroup)?.let { g -> (0 until g.childCount).firstNotNullOfOrNull { findScroll(g.getChildAt(it)) } }
+        val sc = findScroll(act.window.decorView)!!
+        for ((i, y) in listOf(1400, 2800, 4200).withIndex()) { sc.scrollTo(0, y); save(act.window.decorView, "main_s$i") }
         Streak.setValue(act, 1437); Streak.setPerDay(act, 10)
         for (p in Streak.pics) {
             Streak.setPic(act, p)

@@ -160,6 +160,13 @@ object Streak {
         return ChronoUnit.MILLIS.between(now, now.toLocalDate().plusDays(1).atStartOfDay())
     }
 
+    /** «день / дня / дней ударного режима» по правилам русского языка. */
+    fun label(n: Long): String {
+        val d10 = n % 10; val d100 = n % 100
+        val w = when { d100 in 11..14 -> "дней"; d10 == 1L -> "день"; d10 in 2..4 -> "дня"; else -> "дней" }
+        return "$w ударного режима"
+    }
+
     /** Размер числа: чем больше цифр, тем мельче, чтобы влезало в виджет. */
     fun numSize(n: Long): Float = when (n.toString().length) {
         in 0..4 -> 36f; 5 -> 30f; 6 -> 26f; 7 -> 22f; else -> 19f
