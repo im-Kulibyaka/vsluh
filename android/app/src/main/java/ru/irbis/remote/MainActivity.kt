@@ -57,6 +57,7 @@ class MainActivity : Activity() {
                 ACTION_PERMISSION ->
                     if (i.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) connect(d)
                     else say("Нет доступа к USB-передатчику", err = true)
+                ACTION_FLASH_PERM -> { val cb = onFlashPerm; onFlashPerm = null; cb?.invoke(i.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false), d) }
                 UsbManager.ACTION_USB_DEVICE_ATTACHED -> { findUsb(null); ui.postDelayed({ renderMode() }, 1000) }
                 UsbManager.ACTION_USB_DEVICE_DETACHED -> {
                     if (d.deviceName == usbIrDevice) {
@@ -90,7 +91,7 @@ class MainActivity : Activity() {
         hideNavBar()
         if (Term.blueprint || Term.prism) paintBars()   // окно уже создано — можно менять цвет строки состояния
 
-        val f = IntentFilter().apply { addAction(ACTION_PERMISSION); addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED); addAction(UsbManager.ACTION_USB_DEVICE_DETACHED) }
+        val f = IntentFilter().apply { addAction(ACTION_PERMISSION); addAction(ACTION_FLASH_PERM); addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED); addAction(UsbManager.ACTION_USB_DEVICE_DETACHED) }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbReceiver, f, RECEIVER_NOT_EXPORTED) else registerReceiver(usbReceiver, f)
 
         findUsb(intent)
@@ -1419,7 +1420,8 @@ class MainActivity : Activity() {
         val tvPage = buildTvPage()
         val padPage = buildGamepadPage()
         val presPage = buildPresenterPage()
-        val subPages = listOf(p, ledPage, scrPage, tvPage, padPage, presPage)
+        val fwPage = buildFirmwarePage()
+        val subPages = listOf(p, ledPage, scrPage, tvPage, padPage, presPage, fwPage)
         val sub = prefs.getInt("touch_sub", 0).coerceIn(0, subPages.size - 1)
         val subViews = ArrayList<TextView>()
         fun showSub(i: Int) {
@@ -1427,12 +1429,12 @@ class MainActivity : Activity() {
             subPages.forEachIndexed { k, v -> v.visibility = if (k == i) View.VISIBLE else View.GONE }
             if (i != 4) hid?.gamepadNeutral()          // ушли с геймпада — всё отпустить
         }
-        val subLabels = listOf("тачпад", "светодиод", "скрипт", "ТВ", "геймпад", "презентер")
+        val subLabels = listOf("тачпад", "светодиод", "скрипт", "ТВ", "геймпад", "презентер", "прошивка")
         subLabels.forEachIndexed { i, l ->
             subViews += tabButton(l) { showSub(i); prefs.edit().putInt("touch_sub", i).apply() }
                 .apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 11.5f else 14f) }
         }
-        for (rowList in listOf(subViews.subList(0, 3), subViews.subList(3, 6))) {
+        subViews.chunked(4).forEach { rowList ->
             outer.addView(LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false
                 rowList.forEachIndexed { i, v -> addView(v, LinearLayout.LayoutParams(0, dp(36), 1f).apply { if (i > 0) leftMargin = dp(6) }) }
@@ -1764,6 +1766,102 @@ class MainActivity : Activity() {
         p.addView(text("Клавиши слайдов работают в PowerPoint, Keynote, Google Презентациях, PDF. Подключите донгл во вкладке «тачпад».", 12f, Term.DIM).apply {
             typeface = Term.ru; setPadding(dp(4), dp(12), 0, 0) })
         return p
+    }
+
+    /* ---------- «Тачпад» → «прошивка»: обновление платы по Bluetooth (OTA) и по USB-кабелю ---------- */
+
+    private val FW_VERSION = "1.8"
+    @Volatile private var onFlashPerm: ((Boolean, UsbDevice?) -> Unit)? = null
+
+    private fun buildFirmwarePage(): View {
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun big(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 15f else 18f) }
+        p.addView(text("Обновление прошивки донгла $FW_VERSION — прямо с телефона.", 14f, Term.FG).apply { typeface = Term.ru; setPadding(dp(4), dp(8), 0, dp(4)) })
+        p.addView(big("[ ⟳ обновить по Bluetooth ]") { otaUpdate() }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
+        p.addView(text("По воздуху, без проводов. Плата должна быть уже прошита и подключена (вкладка «тачпад» → «подключить»). Новая прошивка пишется в запасной раздел; при сбое плата остаётся на старой.", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(4), 0, dp(10)) })
+        p.addView(big("[ ⎓ прошить по USB-кабелю ]") { usbFlash() }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(6) })
+        p.addView(text("Через переходник USB-OTG (бета). Подходит даже для чистой платы. Переведите плату в режим прошивки: зажмите BOOT, подключите кабель (или нажмите RST), отпустите BOOT. Только Android.", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(4), 0, dp(10)) })
+        p.addView(text("Прошить с компьютера (Chrome/Edge) →", 15f, Term.FG).apply {
+            typeface = Term.ru; paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG; setPadding(dp(4), dp(8), 0, dp(4))
+            setOnClickListener { openExternal(android.net.Uri.parse(FLASH_URL)) }
+        })
+        return p
+    }
+
+    /** Диалог с заголовком, строкой состояния и полоской прогресса. */
+    private fun progressDialog(title: String, onCancel: (() -> Unit)?): Triple<AlertDialog, TextView, android.widget.ProgressBar> {
+        val status = text("", 14f, Term.FG).apply { typeface = Term.ru }
+        val bar = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; isIndeterminate = false }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(16), dp(22), 0)
+            addView(status); addView(bar, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
+        }
+        val b = AlertDialog.Builder(this).setTitle(title).setView(box).setCancelable(false)
+        if (onCancel != null) b.setNegativeButton("Отмена") { _, _ -> onCancel() }
+        return Triple(b.showThemed(), status, bar)
+    }
+
+    /** Обновить прошивку по Bluetooth (OTA): скачать нужный образ и залить на плату. */
+    private fun otaUpdate() {
+        val l = hid?.takeIf { it.state == HidLink.State.READY || it.state == HidLink.State.USB_OFF }
+            ?: return say("> донгл не подключён — вкладка «тачпад» → «подключить»", err = true)
+        val bin = when { !l.c3 -> "krisa37-hid-app.bin"; l.chipC3 -> "krisa37-hid-c3-app.bin"; else -> "krisa37-hid-s3bt-app.bin" }
+        val (dlg, status, bar) = progressDialog("Обновление по Bluetooth") { l.otaCancel() }
+        status.text = "Скачивание прошивки…"; bar.isIndeterminate = true
+        io.execute {
+            val img = runCatching { Lib.getBytes(FLASH_URL + bin) }.getOrNull()
+            ui.post {
+                if (img == null || img.size < 1000) { status.text = "Не удалось скачать прошивку"; ui.postDelayed({ dlg.dismiss() }, 2500); return@post }
+                bar.isIndeterminate = false; status.text = "Загрузка на плату…"
+                l.otaFlash(img,
+                    onProgress = { sent, total -> val pct = if (total > 0) sent * 100 / total else 0; bar.progress = pct; status.text = "Загрузка на плату… $pct%" },
+                    onDone = { ok ->
+                        if (ok) { bar.progress = 100; status.text = "Готово! Плата перезагружается."; say("> прошивка обновлена", ok = true) }
+                        else { status.text = "Ошибка прошивки — плата осталась на старой версии"; say("> прошивка не удалась", err = true) }
+                        ui.postDelayed({ dlg.dismiss() }, if (ok) 1800 else 3000)
+                    })
+            }
+        }
+    }
+
+    /** Прошить плату по USB-кабелю (OTG): выбрать тип платы, затем образ. */
+    private fun usbFlash() {
+        val types = listOf(
+            "ESP32-S3 SuperMini" to "krisa37-hid.bin",
+            "ESP32-S3 N8R8 / N16R8" to "krisa37-hid-opi.bin",
+            "ESP32-C3 SuperMini" to "krisa37-hid-c3.bin",
+            "ESP32-S3 (Bluetooth-режим)" to "krisa37-hid-s3bt.bin")
+        AlertDialog.Builder(this).setTitle("Какая у вас плата?")
+            .setItems(types.map { it.first }.toTypedArray()) { _, idx -> usbFlashRun(types[idx].second, types[idx].first) }
+            .setNegativeButton("Отмена", null).showThemed()
+    }
+
+    private fun usbFlashRun(bin: String, label: String) {
+        val dev = EspFlash.find(usb)
+            ?: return say("Плата не найдена по USB. Переходник OTG? Режим прошивки: зажать BOOT, подключить (или RST), отпустить BOOT.", err = true)
+        fun go() {
+            val (dlg, status, bar) = progressDialog("Прошивка по USB · $label", null)
+            status.text = "Скачивание прошивки…"; bar.isIndeterminate = true
+            Thread {
+                val img = runCatching { Lib.getBytes(FLASH_URL + bin) }.getOrNull()
+                if (img == null || img.size < 1000) { ui.post { status.text = "Не удалось скачать прошивку"; ui.postDelayed({ dlg.dismiss() }, 2500) }; return@Thread }
+                ui.post { bar.isIndeterminate = false; status.text = "Подключение к плате…" }
+                val fl = EspFlash(usb,
+                    log = { m -> ui.post { status.text = m } },
+                    progress = { sent, total -> ui.post { bar.progress = if (total > 0) sent * 100 / total else 0 } })
+                val ok = fl.flash(dev, img)
+                ui.post {
+                    if (ok) { bar.progress = 100; say("> плата прошита по USB", ok = true) } else say("> прошивка по USB не удалась", err = true)
+                    ui.postDelayed({ dlg.dismiss() }, if (ok) 2000 else 4000)
+                }
+            }.start()
+        }
+        if (usb.hasPermission(dev)) go()
+        else {
+            onFlashPerm = { ok, _ -> if (ok) go() else say("Нет доступа к USB-плате", err = true) }
+            val flags = if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
+            usb.requestPermission(dev, PendingIntent.getBroadcast(this, 1, Intent(ACTION_FLASH_PERM).setPackage(packageName), flags))
+        }
     }
 
     /* ---------- «Тачпад» → «скрипт»: Ducky Script, автозапвск. Только для своих устройств. ---------- */
@@ -3042,5 +3140,6 @@ class MainActivity : Activity() {
         private const val FLASH_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/"
         private const val PREF_PROJ = "proj_brand"
         private const val ACTION_PERMISSION = "ru.irbis.remote.USB_PERMISSION"
+        private const val ACTION_FLASH_PERM = "ru.irbis.remote.USB_FLASH_PERMISSION"
     }
 }

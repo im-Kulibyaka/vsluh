@@ -197,6 +197,7 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
             else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 ui.post {
                     if (gatt === g) {
+                        if (otaOn) finishOta(otaSent >= otaTotal)   // плата перезагрузилась после прошивки — это успех
                         if (state == State.CONNECTING) failed("не удалось подключиться (код $status)")
                         else { runCatching { g.close() }; gatt = null; rx = null; ops.clear(); busy = false; set(State.OFF, if (status != 0) "связь потеряна" else null) }
                     }
@@ -207,6 +208,7 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
         @Suppress("DEPRECATION")
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
             val s = g.getService(SERVICE) ?: return ui.post { disconnect(); set(State.OFF, "это не донгл krisa37 HID") }.let { }
+            runCatching { g.requestMtu(247) }        // крупнее пакеты — для прошивки по воздуху
             rx = s.getCharacteristic(RX)
             val info = s.getCharacteristic(INFO)
             if (info != null) {
@@ -224,6 +226,7 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
 
         override fun onCharacteristicWrite(g: BluetoothGatt, ch: BluetoothGattCharacteristic, status: Int) = done()
         override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, status: Int) = done()
+        override fun onMtuChanged(g: BluetoothGatt, m: Int, status: Int) { if (status == BluetoothGatt.GATT_SUCCESS) mtu = m }
 
         @Deprecated("Deprecated in Java")
         @Suppress("DEPRECATION")
@@ -241,16 +244,22 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
     /** На плате сохранён скрипт автозапуска. */
     var hasScript = false; private set
 
-    /** Донгл на ESP32-C3: к доске он подключается по Bluetooth, а не по USB. */
+    /** Донгл на ESP32-C3: к доске он подключается по Bluetooth, а не по USB (прошивка-скетч BLE-HID). */
     var c3 = false; private set
+    /** Реальный чип платы по INFO: true — ESP32-C3, false — ESP32-S3. Для выбора образа OTA. */
+    var chipC3 = false; private set
+    /** Согласованный MTU (по умолчанию 23). Нужен ≥247 для быстрой прошивки по воздуху. */
+    @Volatile private var mtu = 23
 
     /** «krisa37-hid 1.0 usb=1 auth=ok» (у ESP32-C3 — «krisa37-hid-c3 …», usb=1 — доска подключена по Bluetooth) */
     private fun info(v: ByteArray?) {
         val s = v?.toString(Charsets.UTF_8) ?: return
         c3 = "hid-c3" in s
+        chipC3 = "chip=c3" in s
         ui.removeCallbacks(connectTimeout)
         if ("led=mono" in s) ledMono = true else if ("led=rgb" in s) ledMono = false
         if ("scr=1" in s) hasScript = true else if ("scr=0" in s) hasScript = false
+        if ("ota=ok" in s) finishOta(true) else if ("ota=err" in s) finishOta(false)
         set(when {
             "auth=denied" in s -> State.DENIED
             "auth=ok" in s && "usb=0" in s -> State.USB_OFF
@@ -341,6 +350,53 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
     /** Вернуть пульт в нейтраль (всё отпущено). */
     fun gamepadNeutral() { ui.removeCallbacks(padFlusher); pBtn = 0; pHat = 0; pLx = 0; pLy = 0; pRx = 0; pRy = 0; padSend() }
     fun text(t: String): Boolean { var ok = true; chunks(t).forEach { ok = send(byteArrayOf(0x07) + it) && ok }; return ok }
+
+    /* ---------- прошивка по воздуху (OTA, пакеты 0x30..0x33) ---------- */
+
+    @Volatile var otaOn = false; private set
+    private var otaProg: ((Int, Int) -> Unit)? = null
+    private var otaDone: ((Boolean) -> Unit)? = null
+    private var otaTotal = 0
+    @Volatile private var otaSent = 0
+
+    private val otaTimeout = Runnable { if (otaOn) finishOta(false) }
+
+    /** Залить образ прошивки (app-раздел) на плату по Bluetooth. onProgress(отправлено, всего), onDone(успех). */
+    fun otaFlash(image: ByteArray, onProgress: (Int, Int) -> Unit, onDone: (Boolean) -> Unit) {
+        if (rx == null || (state != State.READY && state != State.USB_OFF) || otaOn) { onDone(false); return }
+        otaOn = true; otaProg = onProgress; otaDone = onDone; otaTotal = image.size; otaSent = 0
+        val sz = image.size
+        send(byteArrayOf(0x30, (sz and 0xFF).toByte(), ((sz shr 8) and 0xFF).toByte(),
+            ((sz shr 16) and 0xFF).toByte(), ((sz shr 24) and 0xFF).toByte()), withResponse = true)
+        val chunkMax = (mtu - 4).coerceIn(18, 240)
+        var i = 0
+        while (i < image.size) {
+            val end = minOf(i + chunkMax, image.size)
+            val pkt = ByteArray(end - i + 1); pkt[0] = 0x31
+            System.arraycopy(image, i, pkt, 1, end - i)
+            val n = end - i
+            val ch = rx ?: break
+            enqueue {
+                val ok = write(ch, pkt, true)
+                if (ok) { otaSent += n; ui.post { if (otaOn) otaProg?.invoke(otaSent, otaTotal) } }
+                ok
+            }
+            i = end
+        }
+        send(byteArrayOf(0x32), withResponse = true)
+        ui.removeCallbacks(otaTimeout); ui.postDelayed(otaTimeout, 180000)
+    }
+
+    private fun finishOta(ok: Boolean) {
+        if (!otaOn) return
+        otaOn = false; ui.removeCallbacks(otaTimeout)
+        synchronized(ops) { ops.clear() }
+        val cb = otaDone; otaDone = null; otaProg = null
+        ui.post { cb?.invoke(ok) }
+    }
+
+    /** Прервать прошивку (например, пользователь отменил). */
+    fun otaCancel() { if (otaOn) { runCatching { send(byteArrayOf(0x33)) }; finishOta(false) } }
 }
 
 /**

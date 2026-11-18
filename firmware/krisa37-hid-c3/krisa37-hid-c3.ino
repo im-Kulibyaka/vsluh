@@ -21,10 +21,16 @@
 #include <Preferences.h>
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
+#include "esp_ota_ops.h"
 #include "types.h"
 #include "keymap.h"
 
-#define VERSION "1.5"
+#define VERSION "1.6"
+#if defined(CONFIG_IDF_TARGET_ESP32C3)
+#define CHIP "c3"
+#else
+#define CHIP "s3"
+#endif
 #define SERVICE_UUID "6b7e0001-3a1f-4c7e-9d2a-6b72697361a0"
 #define RX_UUID      "6b7e0002-3a1f-4c7e-9d2a-6b72697361a0"
 #define INFO_UUID    "6b7e0003-3a1f-4c7e-9d2a-6b72697361a0"
@@ -75,12 +81,21 @@ uint8_t token[8];
 bool hasToken = false;
 uint8_t mouseButtons = 0;
 
+/* Прошивка по воздуху (OTA). */
+esp_ota_handle_t otaHandle = 0;
+const esp_partition_t *otaPart = nullptr;
+bool otaActive = false;
+uint32_t otaSize = 0, otaRecv = 0;
+int otaState = 0;
+
 bool boardConnected() { return server && (int)server->getConnectedCount() > (phoneConn >= 0 ? 1 : 0); }
 
 void publishInfo() {
   if (!info) return;
+  const char *ota = otaState == 1 ? "go" : otaState == 2 ? "ok" : otaState == 3 ? "err" : "0";
   String s = String("krisa37-hid-c3 ") + VERSION + " usb=" + (boardConnected() ? "1" : "0") + " auth=" +
-             (auth == AUTH_OK ? "ok" : auth == AUTH_DENIED ? "denied" : "need") + " led=mono scr=" + (scriptLen > 0 ? "1" : "0");
+             (auth == AUTH_OK ? "ok" : auth == AUTH_DENIED ? "denied" : "need") + " led=mono scr=" + (scriptLen > 0 ? "1" : "0") +
+             " chip=" + CHIP + " ota=" + ota;
   info->setValue(s.c_str());
   if (phoneConn >= 0) info->notify();
 }
@@ -267,6 +282,33 @@ void handle(const Packet &p) {
     case 0x0A:                                   // игровой пульт: кнопки + стики + hat
       if (p.len >= 8)
         gamepadReport(p.data[1] | (p.data[2] << 8), p.data[7], (int8_t)p.data[3], (int8_t)p.data[4], (int8_t)p.data[5], (int8_t)p.data[6]);
+      break;
+    case 0x30: {   // OTA: начать
+      if (p.len >= 5) {
+        otaSize = (uint32_t)p.data[1] | ((uint32_t)p.data[2] << 8) | ((uint32_t)p.data[3] << 16) | ((uint32_t)p.data[4] << 24);
+        otaPart = esp_ota_get_next_update_partition(NULL);
+        otaRecv = 0;
+        if (otaPart && esp_ota_begin(otaPart, otaSize ? otaSize : OTA_SIZE_UNKNOWN, &otaHandle) == ESP_OK) { otaActive = true; otaState = 1; }
+        else { otaActive = false; otaState = 3; }
+        publishInfo();
+      }
+      break;
+    }
+    case 0x31:     // OTA: данные
+      if (otaActive && p.len > 1) {
+        if (esp_ota_write(otaHandle, p.data + 1, p.len - 1) == ESP_OK) otaRecv += p.len - 1;
+        else { esp_ota_abort(otaHandle); otaActive = false; otaState = 3; publishInfo(); }
+      }
+      break;
+    case 0x32:     // OTA: завершить и перезагрузиться
+      if (otaActive) {
+        otaActive = false;
+        if (esp_ota_end(otaHandle) == ESP_OK && esp_ota_set_boot_partition(otaPart) == ESP_OK) { otaState = 2; publishInfo(); delay(400); esp_restart(); }
+        else { otaState = 3; publishInfo(); }
+      }
+      break;
+    case 0x33:     // OTA: отмена
+      if (otaActive) { esp_ota_abort(otaHandle); otaActive = false; otaState = 0; publishInfo(); }
       break;
     case 0x20: scriptRecv = 0; break;
     case 0x21: { size_t c = p.len - 1; if (scriptRecv + c <= SCRIPT_MAX) { memcpy(scriptBuf + scriptRecv, p.data + 1, c); scriptRecv += c; } break; }
