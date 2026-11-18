@@ -531,6 +531,18 @@ body.touch #grid,body.touch #more,body.touch #grid2{display:none}
 [data-theme=prism] .hidp .prestimer{border-radius:16px}
 .hidp .prestimer .tval{flex:1;font:28px var(--mono);color:var(--fg);letter-spacing:2px}
 .hidp .prestimer .gear.tab.acb{flex:none;height:40px;font-size:13px;padding:0 10px}
+/* прошивка (OTA) */
+.hidp .fwgo{width:100%;height:52px;margin-top:12px;font-size:15px}
+.hidp .fwgo[disabled]{opacity:.7;cursor:default}
+.hidp .fwbar{height:14px;margin-top:14px;border:1px solid var(--line);overflow:hidden;background:color-mix(in srgb,var(--bg) 70%,transparent)}
+[data-theme=prism] .hidp .fwbar{border-radius:8px}
+.hidp .fwbar i{display:block;height:100%;width:0;background:var(--fg);transition:width .15s linear}
+.hidp .fwst{margin:10px 2px 0;font:13px var(--ru);color:var(--dim)}
+.hidp .fwst.ok{color:var(--fg)}
+[data-theme=thermal] .hidp .fwst.err{color:var(--yel)}
+.hidp .fwnote{margin-top:14px;line-height:1.5}
+.hidp .fwflash{margin-top:14px}
+[data-theme=thermal] .hidp .fwst{text-shadow:0 0 3px #000,0 0 6px #000}
 .libp{display:none}
 body.lib #lib{display:block}
 body.lib #grid,body.lib #more,body.lib #grid2,body.lib .status{display:none}
@@ -2468,7 +2480,7 @@ window.irxReady = true;
    INFO (read + notify): «krisa37-hid <версия> usb=<0|1> auth=<ok|need|denied>». */
 const HID = {
   SVC: '6b7e0001-3a1f-4c7e-9d2a-6b72697361a0', RX: '6b7e0002-3a1f-4c7e-9d2a-6b72697361a0', INFO: '6b7e0003-3a1f-4c7e-9d2a-6b72697361a0',
-  dev: null, rx: null, info: null, state: 'off', usb: true, auth: '', q: Promise.resolve(), tried: false, sticky: 0, led: '', scr: false, mbtn: 0,
+  dev: null, rx: null, info: null, state: 'off', usb: true, auth: '', q: Promise.resolve(), tried: false, sticky: 0, led: '', scr: false, mbtn: 0, chip: '',
   ledSt: { mode: 0, r: 0, g: 64, b: 255, bright: 40 },   // светодиод донгла: режим, цвет, яркость (хранится)
 };
 try { const v = JSON.parse(localStorage.getItem('krisa-hid-led') || 'null'); if (v) for (const k in HID.ledSt) if (Number.isFinite(v[k])) HID.ledSt[k] = Math.max(0, Math.min(k === 'mode' ? 4 : 255, v[k] | 0)); } catch {}
@@ -2502,6 +2514,8 @@ function hidParse(v) {
   const l = /led=(rgb|mono)/.exec(s), led = l ? l[1] : HID.led;   // цветной светодиод (S3) или один синий (C3)
   if (led !== HID.led) { HID.led = led; window.ledRender && ledRender(); }
   const sc = /scr=(\d)/.exec(s); if (sc) HID.scr = sc[1] === '1';   // на плате сохранён скрипт
+  const ch = /chip=(c3|s3)/.exec(s); if (ch) HID.chip = ch[1];   // чип донгла: для выбора app-образа при обновлении по OTA
+  window.fwRefresh && window.fwRefresh();
   hidRender();
 }
 /** Отправить пакет: по очереди (GATT не умеет параллельно), без ответа. */
@@ -2586,7 +2600,7 @@ function hidText(text) {
     + '<div class="tp" aria-label="Тачпад"><span>один палец — курсор · касание — клик · два пальца — прокрутка и правый клик · удержание — перетащить</span></div>'
     + '<div class="srow hbtn"></div><div class="srow hmbtn"></div><div class="hsens"></div>'
     + '<div class="srow htxt"><input type="text" class="hin" placeholder="⌨ печатать…" autocomplete="off" spellcheck="false"></div><div class="srow hlang"></div>'
-    + '<div class="srow hmods"></div><div class="hkeys"></div><p class="xl">мои сочетания</p><div class="hkeys hcombos"></div></div><div class="hled" hidden></div><div class="hscr" hidden></div><div class="htv" hidden></div><div class="hgp" hidden></div><div class="hpres" hidden></div><a class="hflash" href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
+    + '<div class="srow hmods"></div><div class="hkeys"></div><p class="xl">мои сочетания</p><div class="hkeys hcombos"></div></div><div class="hled" hidden></div><div class="hscr" hidden></div><div class="htv" hidden></div><div class="hgp" hidden></div><div class="hpres" hidden></div><div class="hfw" hidden></div><a class="hflash" href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
   box.querySelector('.hcon').addEventListener('click', () => HID.state === 'on' ? hidDisconnect() : hidConnect());
   // клики Л / С / П
   [['[ Л ]', 1], ['[ С ]', 4], ['[ П ]', 2]].forEach(([l, m]) => sBtn(box.querySelector('.hbtn'), l, () => hidClick(m)));
@@ -2773,17 +2787,18 @@ function hidText(text) {
   let sub = 0;
   try { sub = parseInt(localStorage.getItem('krisa-hid-sub'), 10) || 0; } catch {}
   const subBox = box.querySelector('.hsub');
-  sub = Math.max(0, Math.min(5, sub));
+  sub = Math.max(0, Math.min(6, sub));
   let prevSub = sub;
   const showSub = () => {
     if (prevSub === 4 && sub !== 4) gpNeutral();   // ушли с геймпада — нейтраль
     [...subBox.children].forEach((c, i) => c.classList.toggle('on', i === sub));
     box.querySelector('.hpad').hidden = sub !== 0; box.querySelector('.hled').hidden = sub !== 1; box.querySelector('.hscr').hidden = sub !== 2;
     box.querySelector('.htv').hidden = sub !== 3; box.querySelector('.hgp').hidden = sub !== 4; box.querySelector('.hpres').hidden = sub !== 5;
-    if (sub === 1) ledRender(); else if (sub === 2) scrRender(); else if (sub === 3) tvRender(); else if (sub === 4) gpRender(); else if (sub === 5) presRender();
+    box.querySelector('.hfw').hidden = sub !== 6;
+    if (sub === 1) ledRender(); else if (sub === 2) scrRender(); else if (sub === 3) tvRender(); else if (sub === 4) gpRender(); else if (sub === 5) presRender(); else if (sub === 6) fwRender();
     prevSub = sub;
   };
-  chipRow(subBox, ['тачпад', 'светодиод', 'скрипт', 'ТВ', 'геймпад', 'презентер'], i => { sub = i; try { localStorage.setItem('krisa-hid-sub', String(i)); } catch {} showSub(); });
+  chipRow(subBox, ['тачпад', 'светодиод', 'скрипт', 'ТВ', 'геймпад', 'презентер', 'прошивка'], i => { sub = i; try { localStorage.setItem('krisa-hid-sub', String(i)); } catch {} showSub(); });
 
   /* «светодиод»: пакет 0x08 LED [0x08, mode, r, g, b, bright] — 0 авто (статус), 1 цвет, 2 дыхание, 3 радуга (на C3 — мигает), 4 выкл.
      При движении ползунка — не чаще раза в 60 мс и финальный при отпускании. Состояние хранится и шлётся при каждом подключении (после AUTH), если не «авто». */
@@ -3245,6 +3260,79 @@ function hidText(text) {
     stUpd(); presShow();
     gpPresPad(PB.querySelector('.prespad'));
   }
+
+  /* ---------- Подвкладка «прошивка»: обновление прошивки донгла по Bluetooth (OTA) ----------
+     Пакеты app→донгл (writeValueWithResponse — для потока управления, запись по порядку):
+       0x30 OTA_BEGIN [size 4 байта LE] · 0x31 OTA_DATA [кусок ≤240 Б] · 0x32 OTA_END · 0x33 OTA_ABORT.
+     Образ берём из flash/ рядом со страницей; имя — по INFO (hid-c3 + chip=c3|s3). Пишем только в app-раздел.
+     Успех: INFO прислал «ota=ok» ЛИБО разрыв связи после отправки всех данных (плата перезагрузилась). Ошибка: «ota=err» или таймаут ~3 мин. */
+  const FW = box.querySelector('.hfw');
+  const FW_CHUNK = 240, FW_TIMEOUT = 180000, FLASH_URL = 'https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/';
+  let fwBusy = false;
+  /** Имя app-образа по INFO: не krisa37-hid-c3 → S3 USB; c3 — по чипу (c3 или s3-bt). */
+  const fwImageName = () => !HID.c3 ? 'krisa37-hid-app.bin' : HID.chip === 's3' ? 'krisa37-hid-s3bt-app.bin' : 'krisa37-hid-c3-app.bin';
+  const fwBar = f => { const el = FW.querySelector('.fwbar i'); if (el) el.style.width = Math.round(Math.max(0, Math.min(1, f)) * 100) + '%'; };
+  const fwStatus = (t, cls) => { const el = FW.querySelector('.fwst'); if (el) { el.textContent = t; el.classList.toggle('err', cls === 'err'); el.classList.toggle('ok', cls === 'ok'); } };
+  const fwUpd = () => { const go = FW.querySelector('.fwgo'); if (go) { go.textContent = btnLabel(fwBusy ? '[ … идёт обновление ]' : '[ ⟳ обновить по Bluetooth ]'); go.disabled = fwBusy; go.classList.toggle('on', fwBusy); } };
+  /** Запись с ответом, в очереди GATT (по порядку); промис этой записи для await и детекта разрыва. */
+  function fwWrite(bytes) {
+    const data = new Uint8Array(bytes);
+    const p = HID.q.then(() => HID.rx.writeValueWithResponse ? HID.rx.writeValueWithResponse(data) : HID.rx.writeValue(data));
+    HID.q = p.catch(() => {});
+    return p;
+  }
+  async function fwOta() {
+    if (fwBusy) return;
+    if (HID.state !== 'on' || !HID.rx) { status('> донгл не подключён — [ подключить ]'); return; }
+    const name = fwImageName();
+    fwBusy = true; fwUpd(); fwBar(0); fwStatus('скачиваю образ ' + name + '…');
+    let img;
+    try {
+      const resp = await fetch(new URL('flash/' + name, location.href).href, { cache: 'no-store' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      img = new Uint8Array(await resp.arrayBuffer());
+    } catch (e) { fwStatus('не удалось скачать прошивку: ' + (e.message || e), 'err'); fwBusy = false; fwUpd(); return; }
+    const size = img.length;
+    // ожидание результата: INFO «ota=ok»/«ota=err», разрыв связи (после отправки всех данных — успех) или таймаут
+    let allSent = false, resolveRes = null;
+    const onInfo = e => { const s = new TextDecoder().decode(e.target.value); if (/ota=ok/.test(s)) resolveRes && resolveRes('ok'); else if (/ota=err/.test(s)) resolveRes && resolveRes('err'); };
+    const onDisc = () => resolveRes && resolveRes(allSent ? 'ok' : 'disc');
+    const res = new Promise(r => { resolveRes = r; });
+    const timer = setTimeout(() => resolveRes && resolveRes('timeout'), FW_TIMEOUT);
+    HID.info.addEventListener('characteristicvaluechanged', onInfo);
+    HID.dev.addEventListener('gattserverdisconnected', onDisc);
+    const cleanup = () => { try { HID.info.removeEventListener('characteristicvaluechanged', onInfo); } catch {} try { HID.dev.removeEventListener('gattserverdisconnected', onDisc); } catch {} clearTimeout(timer); };
+    try {
+      fwStatus('обновление… не выключайте донгл (' + (size / 1024 | 0) + ' КБ)');
+      await fwWrite([0x30, size & 0xFF, (size >> 8) & 0xFF, (size >> 16) & 0xFF, (size >> 24) & 0xFF]);
+      for (let off = 0; off < size; off += FW_CHUNK) {
+        const end = Math.min(size, off + FW_CHUNK);
+        await fwWrite([0x31, ...img.subarray(off, end)]);
+        fwBar(end / size);
+      }
+      allSent = true;
+      await fwWrite([0x32]);   // при успехе плата перезагрузится — эта запись может не ответить (разрыв), это нормально
+    } catch (e) {
+      if (!allSent) { cleanup(); fwStatus('ошибка отправки: ' + (e.message || e), 'err'); try { await fwWrite([0x33]); } catch {} fwBusy = false; fwUpd(); return; }
+    }
+    fwStatus('проверка… плата перезагружается');
+    const outcome = await res; cleanup();
+    if (outcome === 'ok' || outcome === 'disc') { fwBar(1); fwStatus('готово — прошивка обновлена' + (outcome === 'disc' ? ', донгл перезагрузился' : ''), 'ok'); status('> прошивка донгла обновлена', 'ok'); }
+    else if (outcome === 'err') fwStatus('плата сообщила об ошибке (ota=err) — старая прошивка цела', 'err');
+    else fwStatus('истекло время ожидания — попробуйте ещё раз', 'err');
+    fwBusy = false; fwUpd();
+  }
+  function fwRender() {
+    FW.innerHTML = '<button class="gear tab acb fwgo"></button><div class="fwbar"><i></i></div><p class="fwst"></p>'
+      + '<p class="xl fwnote">Обновление по Bluetooth работает только на плате с прошивкой krisa37, уже подключённой во вкладке «тачпад» → [ подключить ]. '
+      + 'Новая прошивка пишется в запасной раздел — если обновление прервётся, останется старая. '
+      + 'Первую прошивку «чистой» платы делают с компьютера.</p>'
+      + '<a class="hflash fwflash" href="' + FLASH_URL + '" target="_blank" rel="noopener">прошить с компьютера →</a>';
+    FW.querySelector('.fwgo').addEventListener('click', fwOta);
+    fwUpd(); fwBar(0);
+    fwStatus(fwBusy ? 'идёт обновление…' : HID.state === 'on' ? 'готов обновить: ' + fwImageName() : 'сначала подключите донгл во вкладке «тачпад»');
+  }
+  window.fwRefresh = () => { if (sub === 6 && !fwBusy) fwRender(); };
 
   window.scrRender = () => { if (sub === 2) scrRender(); };
 
@@ -3766,7 +3854,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.41', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.42', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);
