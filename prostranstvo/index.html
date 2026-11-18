@@ -209,6 +209,14 @@ Object.assign(sun.shadow.camera,{left:-22,right:22,top:22,bottom:-22,near:1,far:
 
 /* ---------- текстуры ---------- */
 const TL=new THREE.TextureLoader();
+async function loadHDR(url){
+  let buf=null;
+  try { const r=await fetch(url); if (!r.ok) throw 0; buf=await r.arrayBuffer(); }
+  catch(e){ try { const r=await fetch(url+'.txt'); if (!r.ok) return null; const b=atob((await r.text()).trim()); const u=new Uint8Array(b.length); for (let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); buf=u.buffer; } catch(e2){ return null; } }
+  try { const d=new RGBELoader().setDataType(THREE.FloatType).parse(buf); const t=new THREE.DataTexture(d.data,d.width,d.height,THREE.RGBAFormat,THREE.FloatType);
+    t.flipY=true; t.minFilter=t.magFilter=THREE.LinearFilter; t.generateMipmaps=false; t.colorSpace=THREE.LinearSRGBColorSpace; t.needsUpdate=true; return t; } catch(e){ return null; }
+}
+
 const loadTex=(url,srgb=true)=>new Promise(res=>TL.load(url, t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=ANISO; if (srgb) t.colorSpace=THREE.SRGBColorSpace; t.userData.keep=true; res(t); }, undefined, ()=>res(null)));
 let concrete=null, concreteN=null, hubEnv=null, hubBg=null;
 const hueTex=(()=>{ const cv=document.createElement('canvas'); cv.width=cv.height=256; const c=cv.getContext('2d'); const img=c.createImageData(256,256);
@@ -216,7 +224,7 @@ const hueTex=(()=>{ const cv=document.createElement('canvas'); cv.width=cv.heigh
   c.putImageData(img,0,0); const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.userData.keep=true; return t; })();
 async function loadHubAssets(){
   const [d,n,bg,hdr]=await Promise.all([ loadTex('assets/tex/brushed_concrete.jpg'), loadTex('assets/tex/brushed_concrete_n.jpg',false), loadTex('assets/sky/kloofendal_overcast.jpg'),
-    new Promise(res=>new RGBELoader().setDataType(THREE.FloatType).load('assets/sky/kloofendal_overcast.hdr', res, undefined, ()=>res(null))) ]);
+    loadHDR('assets/sky/kloofendal_overcast.hdr') ]);
   concrete=d; concreteN=n;
   if (bg){ bg.mapping=THREE.EquirectangularReflectionMapping; hubBg=bg; }
   if (hdr){ hdr.mapping=THREE.EquirectangularReflectionMapping; const D=hdr.image.data; for (let i=0;i<D.length;i++) if ((i&3)!==3&&D[i]>60) D[i]=60; hdr.needsUpdate=true; hubEnv=pmrem.fromEquirectangular(hdr).texture; hdr.dispose(); }

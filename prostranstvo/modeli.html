@@ -232,6 +232,14 @@ sun.shadow.bias=-.0002; scene.add(sun, sun.target);
 
 /* ---------- фото-текстуры (Poly Haven, CC0) и небо HDRI ---------- */
 const TL=new THREE.TextureLoader();
+async function loadHDR(url){
+  let buf=null;
+  try { const r=await fetch(url); if (!r.ok) throw 0; buf=await r.arrayBuffer(); }
+  catch(e){ try { const r=await fetch(url+'.txt'); if (!r.ok) return null; const b=atob((await r.text()).trim()); const u=new Uint8Array(b.length); for (let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); buf=u.buffer; } catch(e2){ return null; } }
+  try { const d=new RGBELoader().setDataType(THREE.FloatType).parse(buf); const t=new THREE.DataTexture(d.data,d.width,d.height,THREE.RGBAFormat,THREE.FloatType);
+    t.flipY=true; t.minFilter=t.magFilter=THREE.LinearFilter; t.generateMipmaps=false; t.colorSpace=THREE.LinearSRGBColorSpace; t.needsUpdate=true; return t; } catch(e){ return null; }
+}
+
 const loadTex=(url,srgb)=>new Promise(res=>TL.load(url, t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=ANISO; if (srgb) t.colorSpace=THREE.SRGBColorSpace; t.userData.keep=true; res(t); }, undefined, ()=>res(null)));
 const WHITE=new THREE.DataTexture(new Uint8Array([200,200,200,255]),1,1); WHITE.needsUpdate=true; WHITE.userData.keep=true;
 const FLATN=new THREE.DataTexture(new Uint8Array([128,128,255,255]),1,1); FLATN.needsUpdate=true; FLATN.userData.keep=true;
@@ -252,7 +260,7 @@ async function loadSky(key){
   if (skyCache[key]) return skyCache[key];
   const [file, hor]=SKIES[key];
   const [bg, hdr]=await Promise.all([ loadTex(`assets/sky/${file}.jpg`, true),
-    new Promise(res=>new RGBELoader().setDataType(THREE.FloatType).load(`assets/sky/${file}.hdr`, res, undefined, ()=>res(null))) ]);
+    loadHDR(`assets/sky/${file}.hdr`) ]);
   if (bg){ bg.mapping=THREE.EquirectangularReflectionMapping; bg.wrapS=bg.wrapT=THREE.ClampToEdgeWrapping; }
   const sky={ bg, env:null, hor, sunDir:new V3(.4,.8,.4).normalize(), sunCol:new THREE.Color(1,.95,.88) };
   if (hdr){
