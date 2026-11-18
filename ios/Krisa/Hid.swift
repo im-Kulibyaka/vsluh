@@ -24,6 +24,10 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     @Published var stickyMods: UInt8 = 0
     /// Светодиод донгла по INFO: "rgb" (S3, цветной), "mono" (C3, синий) или "" — пока неизвестно.
     @Published var ledKind: String = ""
+    /// Прошивка платы — C3-вариант (INFO содержит "hid-c3"): влияет на имя app-образа для OTA.
+    @Published var fwC3 = false
+    /// Чип платы по INFO: chip=c3 (иначе ESP32-S3).
+    @Published var chipC3 = false
     /// Найдено несколько донглов — выбор (по уровню сигнала).
     @Published var choices: [HidChoice] = []
     /// На плате сохранён скрипт (scr=1 в INFO).
@@ -50,6 +54,17 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     private var signal: [UUID: Int] = [:]
     private var collecting = false
     private var denied = false
+
+    // OTA (обновление прошивки платы по воздуху: 0x30 begin, 0x31 data, 0x32 end, 0x33 abort)
+    private var otaQueue: [[UInt8]] = []     // пакеты по порядку (FIFO): begin, куски, end
+    private var otaIndex = 0                  // следующий к отправке
+    private var otaActive = false
+    private var otaAllSent = false            // отправлены все данные и end — ждём ota=ok или разрыв
+    private var otaSent = 0                   // отправлено байт образа (для прогресса)
+    private var otaTotal = 0
+    private var otaTimeoutToken = 0
+    private var otaProgress: ((Int, Int) -> Void)?
+    private var otaDone: ((Bool) -> Void)?
 
     /// Токен привязки: 8 случайных байт, создаётся один раз (ключ "hid_token").
     private var token: [UInt8] {
@@ -93,6 +108,8 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
         heldKeys = []
         mouseMask = 0
         ledKind = ""
+        fwC3 = false
+        chipC3 = false
         scrSaved = false
         rx = nil
         info = nil
@@ -237,6 +254,9 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     }
 
     func centralManager(_ c: CBCentralManager, didDisconnectPeripheral p: CBPeripheral, error: Error?) {
+        if otaActive && p.identifier == peripheral?.identifier {
+            finishOta(otaAllSent)             // разрыв после отправки всего образа = плата перезагрузилась (успех)
+        }
         if p.identifier != peripheral?.identifier { return }   // отменённое подключение к прежнему донглу
         peripheral = nil
         reset(denied ? "донгл привязан к другому телефону — удерживайте BOOT 3 с" : "не подключён")
@@ -274,6 +294,19 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
         } else if text.contains("led=mono") {
             ledKind = "mono"
         }
+        fwC3 = text.contains("hid-c3")
+        if text.contains("chip=c3") {
+            chipC3 = true
+        } else if text.contains("chip=s3") {
+            chipC3 = false
+        }
+        if otaActive {
+            if text.contains("ota=ok") {
+                finishOta(true)
+            } else if text.contains("ota=err") {
+                finishOta(false)
+            }
+        }
         if text.contains("scr=1") {
             scrSaved = true
         } else if text.contains("scr=0") {
@@ -292,6 +325,28 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
             ready = rx != nil
             status = "подключён"
         }
+    }
+
+    /// Подтверждение записи (.withResponse) — поток OTA строго по порядку, следующий кусок после didWrite.
+    func peripheral(_ p: CBPeripheral, didWriteValueFor ch: CBCharacteristic, error: Error?) {
+        guard otaActive, ch.uuid == HidLink.rxUUID else { return }
+        if error != nil {
+            if let r = rx { p.writeValue(Data([0x33]), for: r, type: .withResponse) }  // прервать на плате
+            finishOta(false)
+            return
+        }
+        guard otaIndex < otaQueue.count else { return }
+        let pkt: [UInt8] = otaQueue[otaIndex]
+        if pkt.first == 0x31 {
+            otaSent += pkt.count - 1
+            otaProgress?(otaSent, otaTotal)
+        }
+        otaIndex += 1
+        if otaIndex >= otaQueue.count {
+            otaAllSent = true                 // всё отправлено — ждём ota=ok или разрыв (перезагрузку платы)
+            return
+        }
+        otaStep()
     }
 
     // MARK: команды
@@ -453,6 +508,65 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
         }
         if !chunk.isEmpty { return send([0x07] + chunk) }
         return true
+    }
+
+    // MARK: OTA — прошивка платы по Bluetooth (0x30 begin, 0x31 кусок, 0x32 end, 0x33 abort)
+
+    /// Залить app-образ по BLE. progress(отправлено, всего) и done(успех) — в главном потоке.
+    /// Успех: INFO «ota=ok» ЛИБО разрыв связи после отправки всего образа (плата перезагрузилась).
+    func flash(_ image: Data, progress: @escaping (Int, Int) -> Void, done: @escaping (Bool) -> Void) {
+        if otaActive { done(false); return }
+        guard ready, let p = peripheral, rx != nil, !image.isEmpty else { done(false); return }
+        otaProgress = progress
+        otaDone = done
+        otaActive = true
+        otaAllSent = false
+        otaSent = 0
+        otaTotal = image.count
+        otaIndex = 0
+
+        var q: [[UInt8]] = []
+        let size: UInt32 = UInt32(image.count)
+        q.append([0x30, UInt8(size & 0xFF), UInt8((size >> 8) & 0xFF), UInt8((size >> 16) & 0xFF), UInt8((size >> 24) & 0xFF)])
+        // кусок ≤ min(240, maximumWriteValueLength(.withResponse)), минус байт кода 0x31
+        let cap: Int = max(1, min(240, p.maximumWriteValueLength(for: .withResponse)) - 1)
+        let bytes: [UInt8] = [UInt8](image)
+        var i: Int = 0
+        while i < bytes.count {
+            let end: Int = min(i + cap, bytes.count)
+            q.append([0x31] + Array(bytes[i..<end]))
+            i = end
+        }
+        q.append([0x32])
+        otaQueue = q
+
+        otaTimeoutToken += 1
+        let token: Int = otaTimeoutToken
+        DispatchQueue.main.asyncAfter(deadline: .now() + 180) { [weak self] in
+            guard let self = self, self.otaActive, token == self.otaTimeoutToken else { return }
+            self.finishOta(false)                 // таймаут ~3 мин
+        }
+        otaStep()
+    }
+
+    /// Отправить текущий пакет очереди OTA с ответом; следующий — после didWrite.
+    private func otaStep() {
+        guard otaActive, let p = peripheral, let r = rx, otaIndex < otaQueue.count else { return }
+        p.writeValue(Data(otaQueue[otaIndex]), for: r, type: .withResponse)
+    }
+
+    /// Завершить OTA один раз (из INFO, разрыва, таймаута или ошибки записи).
+    private func finishOta(_ success: Bool) {
+        guard otaActive else { return }
+        otaActive = false
+        otaQueue = []
+        otaIndex = 0
+        otaAllSent = false
+        otaTimeoutToken += 1                       // погасить ожидающий таймаут
+        let cb: ((Bool) -> Void)? = otaDone
+        otaProgress = nil
+        otaDone = nil
+        cb?(success)
     }
 }
 
@@ -710,6 +824,8 @@ struct TouchpadPanel: View {
                 GamepadPanel(model: model)
             } else if sub == 5 {
                 PresenterPanel(model: model)
+            } else if sub == 6 {
+                FirmwarePanel(model: model)
             } else {
                 touchArea
             }
@@ -730,11 +846,12 @@ struct TouchpadPanel: View {
                 subChip(0, "тачпад")
                 subChip(1, "светодиод")
                 subChip(2, "скрипт")
+                subChip(3, "ТВ")
             }
             HStack(spacing: 6) {
-                subChip(3, "ТВ")
                 subChip(4, "геймпад")
                 subChip(5, "презентер")
+                subChip(6, "прошивка")
             }
         }
     }
@@ -2651,5 +2768,151 @@ struct PresenterPanel: View {
             let msg: String = "> донгл не подключён — [ подключить ]"
             if model.status != msg { model.say(msg) }
         }
+    }
+}
+
+// MARK: - Прошивка (OTA)
+
+/// Подвкладка «прошивка»: обновление прошивки донгла по Bluetooth (OTA). USB на iOS недоступен.
+struct FirmwarePanel: View {
+    @ObservedObject var model: RemoteModel
+    @ObservedObject private var link = HidLink.shared
+
+    @State private var busy = false
+    @State private var sent = 0
+    @State private var total = 0
+    @State private var result: String?
+
+    private static let base = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/"
+    private static let flashURL = URL(string: "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/")
+
+    /// Имя app-образа по флагам INFO: тип прошивки и чип.
+    private var imageName: String {
+        if !link.fwC3 { return "krisa37-hid-app.bin" }                 // прошивка «krisa37-hid» (S3 USB)
+        return link.chipC3 ? "krisa37-hid-c3-app.bin" : "krisa37-hid-s3bt-app.bin"
+    }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                updateButton
+                if busy { progressView }
+                if let r = result {
+                    Text(r).font(Term.ru(13)).foregroundColor(Term.fg)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                noteText
+                flashLink
+            }
+            .padding(.bottom, 16)
+        }
+    }
+
+    private func label(_ s: String) -> String {
+        if !(Term.prism || Term.blueprint) { return s }
+        var t: String = s
+        if t.hasPrefix("[") { t.removeFirst() }
+        if t.hasSuffix("]") { t.removeLast() }
+        return t.trimmingCharacters(in: .whitespaces)
+    }
+
+    private var updateButton: some View {
+        Button { start() } label: {
+            TabLabel(title: label(busy ? "[ ⟳ обновляю… ]" : "[ ⟳ обновить по Bluetooth ]"), on: busy, height: 52, ruSize: 15, forceRu: true)
+        }
+        .disabled(busy)
+    }
+
+    private var progressView: some View {
+        let frac: Double = total > 0 ? Double(sent) / Double(total) : 0
+        let pct: Int = Int((frac * 100).rounded())
+        return VStack(alignment: .leading, spacing: 4) {
+            Text("обновление… " + String(pct) + "% · " + String(sent / 1024) + " / " + String(total / 1024) + " КБ")
+                .font(Term.ru(13)).foregroundColor(Term.dim)
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Rectangle().fill(Term.bg.opacity(0.6))
+                    Rectangle().fill(Term.fg).frame(width: g.size.width * CGFloat(frac))
+                }
+                .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+            }
+            .frame(height: 16)
+            Text("Не выключайте экран и не уходите далеко от доски.").font(Term.ru(12)).foregroundColor(Term.dim)
+        }
+    }
+
+    private var noteText: some View {
+        Text("Обновление по воздуху работает только на плате, уже прошитой krisa37 и подключённой. Новая прошивка пишется в запасной раздел — при неудаче остаётся старая. Первую прошивку «чистой» платы нужно делать с компьютера. Нужна прошивка донгла 1.8 (ESP32-C3 — 1.6).")
+            .font(Term.ru(12)).foregroundColor(Term.dim)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 2)
+    }
+
+    @ViewBuilder private var flashLink: some View {
+        if let url = FirmwarePanel.flashURL {
+            Link(destination: url) {
+                Text("прошить с компьютера →").font(Term.ru(14)).foregroundColor(Term.fg).underline()
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    // MARK: действия
+
+    private func start() {
+        if busy { return }
+        if !link.ready {
+            result = "Донгл не подключён — нажмите [ подключить ] во вкладке «тачпад»."
+            let msg: String = "> донгл не подключён — [ подключить ]"
+            if model.status != msg { model.say(msg) }
+            return
+        }
+        busy = true
+        result = nil
+        sent = 0
+        total = 0
+        let name: String = imageName
+        model.say("> скачиваю прошивку " + name)
+        guard let url = URL(string: FirmwarePanel.base + name) else {
+            fail("Неверный адрес прошивки.")
+            return
+        }
+        var req = URLRequest(url: url)
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        req.timeoutInterval = 60
+        URLSession.shared.dataTask(with: req) { data, resp, err in
+            DispatchQueue.main.async {
+                let code: Int = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                guard err == nil, let d = data, !d.isEmpty, code == 0 || code == 200 else {
+                    self.fail("Не удалось скачать прошивку. Проверьте интернет и попробуйте ещё раз.")
+                    return
+                }
+                self.flash(d)
+            }
+        }.resume()
+    }
+
+    private func flash(_ image: Data) {
+        total = image.count
+        model.say("> заливаю прошивку по Bluetooth…")
+        link.flash(image, progress: { s, t in
+            sent = s
+            total = t
+        }, done: { ok in
+            busy = false
+            if ok {
+                result = "Готово! Прошивка обновлена, плата перезагрузилась."
+                model.say("> прошивка обновлена")
+            } else {
+                result = "Не получилось обновить прошивку. Старая прошивка сохранилась — попробуйте ещё раз."
+                model.say("> ошибка обновления прошивки", err: true)
+            }
+        })
+    }
+
+    private func fail(_ msg: String) {
+        busy = false
+        result = msg
+        model.say("> не удалось обновить прошивку", err: true)
     }
 }
