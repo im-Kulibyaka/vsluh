@@ -346,12 +346,12 @@ function clothGeo(P, NR, NC, wrap, us, vs){
     add(new THREE.Mesh(clothGeo(P,NR,NC,true,16,10),robeMat)); }
   // рукава: широкие трубы ткани от плеч до рукояти, манжеты скрывают кисти
   for (const sx of [-1,1]){
-    const S=new V3(FIG.x+.2*sx,1.11,FIG.z-.13), E=new V3(FIG.x+.045*sx,.93,FIG.z-.5), d=E.clone().sub(S), Lh=d.length(); d.normalize();
+    const S0=new V3(FIG.x+.2*sx,1.11,FIG.z-.13), S=new V3(FIG.x+.1*sx,1.13,FIG.z-.12), E=new V3(FIG.x+.045*sx,.93,FIG.z-.5), d=E.clone().sub(S), Lh=d.length(); d.normalize();
     const u=new V3(0,1,0).cross(d).normalize(), v=d.clone().cross(u).normalize();
     const NR=34, NC=36, P=new Float32Array(NR*NC*3);
-    for (let i=0;i<NR;i++){ const t=i/(NR-1), r=.1+.06*Math.pow(t,1.5), c=S.clone().addScaledVector(d,(Lh+.07)*t);
+    for (let i=0;i<NR;i++){ const t=i/(NR-1), r=.045+.07*Math.min(1,t/.22)+.05*Math.pow(t,1.5), c=S.clone().addScaledVector(d,(Lh+.07)*t);
       for (let j=0;j<NC;j++){ const a=j/NC*Math.PI*2, k=(i*NC+j)*3; P[k]=c.x+(u.x*Math.cos(a)+v.x*Math.sin(a))*r; P[k+1]=c.y+(u.y*Math.cos(a)+v.y*Math.sin(a))*r; P[k+2]=c.z+(u.z*Math.cos(a)+v.z*Math.sin(a))*r; } }
-    const arm=[...Array(6)].map((_,i)=>{ const p=S.clone().addScaledVector(d,Lh*i/5); return [p.x,p.y,p.z,.115]; });
+    const dA=E.clone().sub(S0), arm=[...Array(6)].map((_,i)=>{ const p=S0.clone().addScaledVector(dA,i/5); return [p.x,p.y,p.z,.115]; });
     clothSim(P,NR,NC,true,[...Array(NC).keys()],[...arm, ...body.slice(1,6).map(b=>[b[0],b[1],b[2],b[3]+.06])],{iters:420,bendK:.12});
     add(new THREE.Mesh(clothGeo(P,NR,NC,true,5,4),robeMat)); }
   // капюшон: открыт спереди, лежит на плечах
@@ -370,7 +370,7 @@ function clothGeo(P, NR, NC, wrap, us, vs){
       let x=sh[0]+Math.sin(a)*rx*(1+Math.min(1,s/1.2)*.45)*spread, y=sh[1]+.06-.09*Math.pow(Math.sin(a),2)*(1-grow*.5)-s, z=sh[2]-.06+Math.cos(a)*rz+.06+s*.05;
       if (y<.03){ z+=.03-y; y=.03; }
       P[k]=x; P[k+1]=y; P[k+2]=z; }
-    clothSim(P,NY,NX,false,[...Array(NX).keys()],body.map(b=>[b[0],b[1],b[2],b[3]+.075]),{iters:420,wind:.12,floorY:.024});
+    clothSim(P,NY,NX,false,[...Array(NX).keys()].filter(i=>Math.abs(i/(NX-1)-.5)<.24),body.map(b=>[b[0],b[1],b[2],b[3]+.075]),{iters:460,wind:.12,floorY:.024});
     add(new THREE.Mesh(clothGeo(P,NY,NX,false,2,4),capeMat)); }
 })();
 
