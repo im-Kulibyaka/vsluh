@@ -337,14 +337,19 @@ function clothGeo(P, NR, NC, wrap, us, vs){
   const head=new THREE.Mesh(new THREE.SphereGeometry(.09,24,16), new THREE.MeshStandardMaterial({ color:'#050506', roughness:1 })); head.position.set(FIG.x,1.32,FIG.z-.26); add(head);
   const linen=pbr('rough_linen',1,{color:'#46474d',n:1.4}); linen.side=THREE.DoubleSide; linen.sheen=0;
   const robeMat=new THREE.MeshPhysicalMaterial({ map:linen.map, normalMap:linen.normalMap, roughnessMap:linen.roughnessMap, color:'#2e2c2c', roughness:1, sheen:.25, sheenColor:new THREE.Color('#4a4644'), sheenRoughness:.7, side:THREE.DoubleSide, normalScale:new THREE.Vector2(1.3,1.3) });
-  const backDark=m=>{ m.onBeforeCompile=sh=>{ sh.fragmentShader=sh.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\n diffuseColor.rgb*=gl_FrontFacing?1.:.42;'); }; return m; };
+  const backDark=m=>{ m.onBeforeCompile=sh=>{ sh.fragmentShader=sh.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\n diffuseColor.rgb*=gl_FrontFacing?1.:.7;'); }; return m; };
   backDark(robeMat); robeMat.normalScale.set(.8,.8);
+  // сплошное тело под тканью в той же ткани: в просветах видна одежда, а не пустота
+  { const bm=robeMat.clone(); bm.side=THREE.FrontSide; bm.onBeforeCompile=()=>{}; const sg=new THREE.SphereGeometry(1,24,18);
+    body.forEach((b,i)=>{ if (b[1]<.5 || i===0) return; const m=new THREE.Mesh(sg,bm); m.position.set(b[0],b[1],b[2]); m.scale.setScalar(b[3]-.005); add(m,false,true); });
+    const neck=new THREE.Mesh(new THREE.CylinderGeometry(.075,.1,.2,20),bm); neck.position.set(FIG.x,1.22,FIG.z-.2); neck.rotation.x=-.4; add(neck,false,true); }
   const velvet=pbr('velour_velvet',1,{n:1});
   const capeMat=backDark(new THREE.MeshPhysicalMaterial({ normalMap:velvet.normalMap, roughnessMap:velvet.roughnessMap, color:'#a30d16', roughness:1, sheen:1, sheenColor:new THREE.Color('#ff5148'), sheenRoughness:.42, side:THREE.DoubleSide }));
   // мантия: трубка от шеи до пола
   { const NR=58, NC=72, P=new Float32Array(NR*NC*3);
-    for (let i=0;i<NR;i++){ const t=i/(NR-1), r=.12+.56*Math.pow(t,1.1), y=1.24-1.5*t, cz=-.2+.18*t;
-      for (let j=0;j<NC;j++){ const a=j/NC*Math.PI*2, k=(i*NC+j)*3; P[k]=FIG.x+Math.sin(a)*r*1.05; P[k+1]=Math.max(.02,y); P[k+2]=FIG.z+cz+Math.cos(a)*r*(y<.02?1+(.02-y)*.8:1); } }
+    for (let i=0;i<NR;i++){ const t=i/(NR-1), r=.12+.56*Math.pow(t,1.1), y=1.25-1.5*t, cz=-.17+.15*t, sh=Math.min(1,t/.07);
+      const rx=Math.max(r*1.05,.1+.28*sh), rz=Math.max(r,.1+.14*sh);          // сразу по ширине плеч, чтобы ткань легла сверху
+      for (let j=0;j<NC;j++){ const a=j/NC*Math.PI*2, k=(i*NC+j)*3; P[k]=FIG.x+Math.sin(a)*rx; P[k+1]=Math.max(.02,y+.04*(1-sh)); P[k+2]=FIG.z+cz+Math.cos(a)*rz*(y<.02?1+(.02-y)*.8:1); } }
     clothSim(P,NR,NC,true,[...Array(NC).keys()],body.map((b,i)=>[b[0],b[1],b[2],b[3]+(i>=body.length-10?.045:.02)]),{iters:440,passes:6});
     add(new THREE.Mesh(clothGeo(P,NR,NC,true,16,10),robeMat),false,true); }
   // рукава: широкие трубы ткани от плеч до рукояти, манжеты скрывают кисти
