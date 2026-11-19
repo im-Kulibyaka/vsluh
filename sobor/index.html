@@ -16,10 +16,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
   touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
 button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
-.title{position:fixed;left:calc(clamp(18px,3vw,48px) + env(safe-area-inset-left,0px));bottom:calc(clamp(18px,4vh,48px) + env(safe-area-inset-bottom,0px));pointer-events:none;
   transition:opacity 1s}
-.title h1{font-family:var(--serif);font-weight:500;font-size:clamp(34px,4.4vw,78px);line-height:1;margin:0;letter-spacing:.01em;text-shadow:0 4px 30px rgba(0,0,0,.6)}
-.title p{font-family:var(--serif);font-style:italic;font-size:clamp(17px,1.5vw,26px);color:var(--muted);margin:.4em 0 0}
 .ui{position:fixed;right:calc(clamp(14px,2vw,32px) + env(safe-area-inset-right,0px));bottom:calc(clamp(14px,3vh,36px) + env(safe-area-inset-bottom,0px));
   display:flex;align-items:center;gap:10px;padding:8px;border-radius:999px;background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 .rbtn{width:clamp(58px,4.6vw,84px);height:clamp(58px,4.6vw,84px);border-radius:50%;border:1px solid var(--line);background:rgba(255,255,255,.05);display:grid;place-items:center;transition:transform .15s}
@@ -44,7 +41,6 @@ button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
 </head>
 <body>
 <canvas id="c"></canvas>
-<div class="title"><h1>Забытый собор</h1><p>Свет всё ещё приходит сюда каждое утро</p></div>
 <div class="ui">
   <button class="rbtn" id="prev" aria-label="Предыдущий вид"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l-8 8 8 8"/></svg></button>
   <div class="dots" id="dots"></div>
@@ -67,6 +63,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { TTFLoader } from 'three/addons/loaders/TTFLoader.js';
+import { Font } from 'three/addons/loaders/FontLoader.js';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -426,9 +425,9 @@ lightCam.position.copy(sun.position); lightCam.lookAt(sun.target.position); ligh
 vol.uniforms.sunW.value.copy(sunDir);
 const depthOnly=new THREE.MeshBasicMaterial({ colorWrite:false });
 let lightDirty=true;
-function renderLightDepth(){ const bg=scene.background, fog=scene.fog; scene.background=null; scene.fog=null; scene.overrideMaterial=depthOnly;
+function renderLightDepth(){ const bg=scene.background, fog=scene.fog; scene.background=null; scene.fog=null; scene.overrideMaterial=depthOnly; if (typeof textRoot!=='undefined') textRoot.visible=false;
   renderer.setRenderTarget(lightRT); renderer.clear(); renderer.render(scene, lightCam); renderer.setRenderTarget(null);
-  scene.overrideMaterial=null; scene.background=bg; scene.fog=fog; lightDirty=false;
+  scene.overrideMaterial=null; scene.background=bg; scene.fog=fog; lightDirty=false; if (typeof textRoot!=='undefined') textRoot.visible=true;
   vol.uniforms.lightVP.value.multiplyMatrices(lightCam.projectionMatrix, lightCam.matrixWorldInverse); }
 scene.add(new THREE.HemisphereLight('#4a5a6b','#15120f',.75));
 const bounce=new THREE.PointLight('#8ea3ba', 7, 16, 1.6); bounce.position.set(.8,1.3,-4.5); scene.add(bounce);   // отражённый свет от пятен на полу
@@ -481,12 +480,46 @@ const dust=(()=>{ const n=FAST?1500:5000, pos=new Float32Array(n*3), ph=new Floa
   const pts=new THREE.Points(g,mat); pts.frustumCulled=false; pts.renderOrder=6; scene.add(pts); return mat; })();
 
 /* ---------- камера: три вида, медленный дрейф, осмотр пальцем ---------- */
-const VIEWS=[ { pos:new V3(-2.6,2.3,8.8), look:new V3(.5,3.2,-8), fov:56 },
-              { pos:new V3(3.4,1.35,2.2), look:new V3(-.4,1.4,-4), fov:50 },
-              { pos:new V3(5.6,7.4,12.2), look:new V3(-1,3,-6.5), fov:58 } ];
+// текст каждого вида: объёмные золотые буквы в воздухе. d — расстояние от камеры, up/right — смещение в кадре
+const VIEWS=[ { pos:new V3(-2.6,2.3,8.8), look:new V3(.5,3.2,-8), fov:56, title:'Забытый собор', sub:'Свет всё ещё приходит сюда каждое утро', d:7, up:1.15, right:0 },
+              { pos:new V3(3.4,1.35,2.2), look:new V3(-.4,1.4,-4), fov:50, title:'Последний рыцарь', sub:'Он остался, когда ушли все', d:4.2, up:.85, right:-.15 },
+              { pos:new V3(5.6,7.4,12.2), look:new V3(-1,3,-6.5), fov:58, title:'Тишина', sub:'Пыль кружится в лучах, как время', d:5.6, up:.9, right:0 } ];
 let view=0, fly=null, yawO=0, pitO=0, fovK=1;
 const cp=VIEWS[0].pos.clone(), cl=VIEWS[0].look.clone(); let cf=VIEWS[0].fov;
 function go(i){ view=(i+VIEWS.length)%VIEWS.length; const v=VIEWS[view]; fly={ p0:cp.clone(), l0:cl.clone(), f0:cf, v, t:0, dur:3.4 }; yawO=pitO=0; fovK=1; renderDots(); }
+/* ---------- золотые надписи в воздухе ---------- */
+const textRoot=new THREE.Group(); scene.add(textRoot);
+const goldLight=new THREE.PointLight('#ffb54a', 0, 5, 2); scene.add(goldLight);
+const texts=[];
+function buildTexts(font){
+  VIEWS.forEach((v,i)=>{
+    const g=new THREE.Group(), viewH=2*v.d*Math.tan(THREE.MathUtils.degToRad(v.fov/2)), size=viewH*.075;
+    const mat=new THREE.MeshPhysicalMaterial({ color:'#e9b955', metalness:1, roughness:.24, clearcoat:.6, clearcoatRoughness:.2,
+      emissive:'#ff9d2e', emissiveIntensity:1.35, transparent:true, opacity:0, envMapIntensity:2 });
+    const mk=(txt,sz,depth)=>{ const geo=new TextGeometry(txt,{ font, size:sz, depth, curveSegments:8, bevelEnabled:true, bevelThickness:depth*.35, bevelSize:sz*.035, bevelSegments:3 });
+      geo.computeBoundingBox(); const b=geo.boundingBox; geo.translate(-(b.max.x+b.min.x)/2, -(b.max.y+b.min.y)/2, -depth/2); return new THREE.Mesh(geo,mat); };
+    const t1=mk(v.title,size,size*.22), t2=mk(v.sub,size*.42,size*.09);
+    t2.position.y=-size*1.12; g.add(t1,t2);
+    t1.geometry.computeBoundingBox(); t2.geometry.computeBoundingBox();
+    const w=Math.max(t1.geometry.boundingBox.max.x-t1.geometry.boundingBox.min.x, t2.geometry.boundingBox.max.x-t2.geometry.boundingBox.min.x);
+    textRoot.add(g); texts.push({ g, mat, w, viewH, v, a:0 });
+  });
+  placeTexts();
+}
+function placeTexts(){ texts.forEach(T=>{ const v=T.v, dir=v.look.clone().sub(v.pos).normalize(), right=dir.clone().cross(new V3(0,1,0)).normalize(), up=right.clone().cross(dir).normalize();
+  const visW=T.viewH*camera.aspect, s=Math.min(1, visW*.86/T.w);                   // на узком экране надпись уменьшается
+  T.base=v.pos.clone().addScaledVector(dir,v.d).addScaledVector(up,v.up*s+(1-s)*v.up*.6).addScaledVector(right,v.right);
+  T.g.scale.setScalar(s); T.g.position.copy(T.base); T.g.lookAt(v.pos); }); }
+addEventListener('resize',()=>{ if (texts.length) placeTexts(); });
+total++; new TTFLoader().load('fonts/RuslanDisplay.ttf', json=>{ loaded++; progress(); buildTexts(new Font(json)); }, undefined, ()=>{ loaded++; progress(); });
+function updateTexts(dt,t){
+  texts.forEach((T,i)=>{ const want=(i===view && (!fly || fly.t>.62))?1:0;
+    T.a+=(want-T.a)*Math.min(1,dt*(want?1.6:6)); if (!want&&T.a<.03) T.a=0; T.mat.opacity=T.a; T.mat.depthWrite=T.a>.95; T.g.visible=T.a>.01;
+    T.g.position.copy(T.base); T.g.position.y+=Math.sin(t*.7+i)*.05+(1-T.a)*.25;      // левитация, при появлении всплывает
+    T.g.lookAt(T.v.pos); T.g.rotateY(Math.sin(t*.4+i*2)*.05); T.g.rotateX(Math.sin(t*.33+i)*.02);
+    T.mat.emissiveIntensity=1.2+Math.sin(t*1.3+i)*.15;
+    if (i===view){ goldLight.position.copy(T.g.position); goldLight.intensity=2.2*T.a; } });
+}
 const dotsEl=document.getElementById('dots');
 VIEWS.forEach((v,i)=>{ const b=document.createElement('button'); b.className='dot'; b.setAttribute('aria-label',`Вид ${i+1}`); b.innerHTML='<i></i>'; b.onclick=()=>go(i); dotsEl.appendChild(b); });
 function renderDots(){ [...dotsEl.children].forEach((d,i)=>d.classList.toggle('on',i===view)); }
@@ -529,6 +562,7 @@ window.__camAt=(p,l,f)=>{ fly=null; cp.set(...p); cl.set(...l); cf=f; };
 renderer.setAnimationLoop(()=>{
   const dt=Math.min(clock.getDelta(),1/20), t=clock.elapsedTime;
   shaftMat.uniforms.time.value=t; dust.uniforms.time.value=t; grade.uniforms.time.value=t; dust.uniforms.pxr.value=pr;
+  updateTexts(dt,t);
   hang.forEach(h=>{ h.rotation.z=.08+Math.sin(t*.35)*.012; h.rotation.x=.06+Math.sin(t*.27)*.01; });
   updateCamera(dt,t); adapt(dt);
   if (lightDirty) renderLightDepth();
