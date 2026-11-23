@@ -65,6 +65,7 @@
   <button class="big" onclick="goScreen()">▣ Экран (показывать здесь)</button>
   <button class="big" onclick="goRemote()">✶ Пульт (управлять)</button>
   <p class="dim" style="font-size:13px">Лучше, чтобы оба устройства были в одной сети Wi-Fi. Связь — напрямую между устройствами (P2P), сервер картинки/звук не хранит.</p>
+  <p class="dim" style="font-size:13px">«Ошибка связи: network»? Нужен VPN — или <a href="test.html">проверьте связь</a> и пришлите скриншот.</p>
   <div class="card" id="share" style="text-align:left;margin-top:18px">
     <div class="dim" style="font-size:13px">Ссылка на «Шоу» — откройте её на доске/ТВ или отправьте:</div>
     <div class="row" style="align-items:center;margin-top:8px">
@@ -180,7 +181,7 @@ function startScreen(code){
     c.on('close',()=>{ conns=conns.filter(x=>x!==c); }); });
   peer.on('error',e=>{
     if(e.type==='unavailable-id'){ startScreen(randCode()); return; }   // код занят — берём другой
-    $('#scrStatus').textContent='ошибка связи: '+e.type;
+    $('#scrStatus').innerHTML='ошибка связи: '+e.type+(e.type==='network'||e.type==='server-error'||e.type==='socket-error'?' — сервер связи недоступен из этой сети (включите VPN) · <a href="test.html" style="color:inherit">проверка связи</a>':'');
   });
 }
 
