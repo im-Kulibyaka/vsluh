@@ -1437,7 +1437,8 @@ class MainActivity : Activity() {
         val padPage = buildGamepadPage()
         val presPage = buildPresenterPage()
         val fwPage = buildFirmwarePage()
-        val subPages = listOf(p, ledPage, scrPage, tvPage, padPage, presPage, fwPage)
+        val showLibPage = buildShowLibPage()
+        val subPages = listOf(p, ledPage, scrPage, tvPage, padPage, presPage, fwPage, showLibPage)
         val sub = prefs.getInt("touch_sub", 0).coerceIn(0, subPages.size - 1)
         val subViews = ArrayList<TextView>()
         fun showSub(i: Int) {
@@ -1445,7 +1446,7 @@ class MainActivity : Activity() {
             subPages.forEachIndexed { k, v -> v.visibility = if (k == i) View.VISIBLE else View.GONE }
             if (i != 4) hid?.gamepadNeutral()          // ушли с геймпада — всё отпустить
         }
-        val subLabels = listOf("тачпад", "светодиод", "скрипт", "ТВ", "геймпад", "презентер", "прошивка")
+        val subLabels = listOf("тачпад", "светодиод", "скрипт", "ТВ", "геймпад", "презентер", "прошивка", "библиотека")
         subLabels.forEachIndexed { i, l ->
             subViews += tabButton(l) { showSub(i); prefs.edit().putInt("touch_sub", i).apply() }
                 .apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 11.5f else 14f) }
@@ -1802,6 +1803,61 @@ class MainActivity : Activity() {
             setOnClickListener { openExternal(android.net.Uri.parse(FLASH_URL)) }
         })
         return p
+    }
+
+    /* ---------- «Тачпад» → «библиотека»: саундпад и показ с выгрузкой на GitHub (встроенный веб-экран) ---------- */
+
+    private var webFileCb: android.webkit.ValueCallback<Array<android.net.Uri>>? = null
+
+    private fun buildShowLibPage(): View {
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun big(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 15f else 18f) }
+        p.addView(text("Библиотека показа: саундпад и фото/видео. Файлы хранятся на GitHub, показ — на странице «Саундпад и показ».", 14f, Term.FG).apply { typeface = Term.ru; setPadding(dp(4), dp(8), 0, dp(4)) })
+        p.addView(big("[ 📚 Библиотека (загрузка на GitHub) ]") { showLibrary("#lib") }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
+        p.addView(text("Добавить звук/фото/видео → загрузится в репозиторий (нужен ваш GitHub-токен, вводится один раз внутри). Через ~1 мин появится в показе.", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(4), 0, dp(10)) })
+        p.addView(big("[ ▶ Открыть показ ]") { showLibrary("") }, LinearLayout.LayoutParams(-1, dp(52)))
+        p.addView(text("Показ открывайте прямо на доске (она сенсорная) — жмёте звуки/фото на ней. Телефоном-пультом отдельно не выйдет без платы/сервера.", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(6), 0, 0) })
+        return p
+    }
+
+    /** Встроенный веб-экран со страницей «Саундпад и показ» (/pad/). Токен и загрузка — внутри страницы. */
+    private fun showLibrary(hash: String) {
+        val d = android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        val web = android.webkit.WebView(this).apply {
+            setBackgroundColor(Color.BLACK)
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true          // нужен для хранения токена (localStorage)
+            webChromeClient = object : android.webkit.WebChromeClient() {
+                override fun onShowFileChooser(wv: android.webkit.WebView?, cb: android.webkit.ValueCallback<Array<android.net.Uri>>?, params: FileChooserParams?): Boolean {
+                    webFileCb?.onReceiveValue(null); webFileCb = cb
+                    return try { startActivityForResult(params!!.createIntent(), REQ_FILE); true } catch (e: Exception) { webFileCb = null; false }
+                }
+            }
+            webViewClient = object : android.webkit.WebViewClient() {
+                override fun shouldOverrideUrlLoading(v: android.webkit.WebView, r: android.webkit.WebResourceRequest): Boolean {
+                    val u = r.url
+                    if ((u.scheme == "http" || u.scheme == "https") && u.host == "mikhailkulinskii1910-jpg.github.io") return false   // наш сайт — внутри
+                    if (u.scheme == "http" || u.scheme == "https") { openExternal(u); return true }
+                    return false
+                }
+            }
+            setDownloadListener { url, _, _, _, _ -> openExternal(android.net.Uri.parse(url)) }
+            loadUrl(PAD_URL + hash)
+        }
+        d.setContentView(web)
+        d.setOnKeyListener { _, code, ev ->
+            if (code == android.view.KeyEvent.KEYCODE_BACK && ev.action == android.view.KeyEvent.ACTION_UP && web.canGoBack()) { web.goBack(); true } else false
+        }
+        d.setOnDismissListener { webFileCb?.onReceiveValue(null); webFileCb = null; web.destroy() }
+        d.show()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_FILE) {
+            val cb = webFileCb; webFileCb = null
+            cb?.onReceiveValue(android.webkit.WebChromeClient.FileChooserParams.parseResult(resultCode, data))
+        }
     }
 
     /** Диалог с заголовком, строкой состояния и полоской прогресса. */
@@ -3155,6 +3211,8 @@ class MainActivity : Activity() {
         private const val REQ_BT = 38
         private const val FLASH_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/"
         private const val SHOW_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/"
+        private const val PAD_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/pad/"
+        private const val REQ_FILE = 73
         private const val SHORT_URL = "https://clck.ru/3XBmBy"   // российский сокращатель (Яндекс) — работает без VPN
         private const val PREF_PROJ = "proj_brand"
         private const val ACTION_PERMISSION = "ru.irbis.remote.USB_PERMISSION"

@@ -167,5 +167,6 @@ function hideProg(){ setTimeout(function(){ $('prog').style.display='none'; $('p
 
 /* старт */
 try{ $('tok').value=token(); }catch(e){}
+if((location.hash||'').indexOf('lib')>=0) tab('lib');
 refresh();
 </script></body></html>

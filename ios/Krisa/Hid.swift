@@ -826,6 +826,8 @@ struct TouchpadPanel: View {
                 PresenterPanel(model: model)
             } else if sub == 6 {
                 FirmwarePanel(model: model)
+            } else if sub == 7 {
+                ShowLibPanel()
             } else {
                 touchArea
             }
@@ -852,6 +854,7 @@ struct TouchpadPanel: View {
                 subChip(4, "геймпад")
                 subChip(5, "презентер")
                 subChip(6, "прошивка")
+                subChip(7, "библиотека")
             }
         }
     }
@@ -2772,6 +2775,31 @@ struct PresenterPanel: View {
 }
 
 // MARK: - Прошивка (OTA)
+
+/// Подвкладка «библиотека»: саундпад и показ с выгрузкой на GitHub — встроенный веб-экран (/pad/).
+struct ShowLibPanel: View {
+    @State private var show = false
+    @State private var hash = "#lib"
+    private let pad = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/pad/"
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Библиотека показа: саундпад и фото/видео. Файлы хранятся на GitHub, показ — на странице «Саундпад и показ».")
+                .font(Term.ru(13)).foregroundColor(Term.dim).fixedSize(horizontal: false, vertical: true)
+            Button { hash = "#lib"; show = true } label: { TabLabel(title: "📚 Библиотека (загрузка на GitHub)", on: true, height: 52, ruSize: 16, forceRu: true) }
+            Text("Добавить звук/фото/видео → загрузится в репозиторий (нужен ваш GitHub-токен, вводится один раз внутри). Через ~1 мин появится в показе.")
+                .font(Term.ru(12)).foregroundColor(Term.dim).fixedSize(horizontal: false, vertical: true)
+            Button { hash = ""; show = true } label: { TabLabel(title: "▶ Открыть показ", on: false, height: 52, ruSize: 16, forceRu: true) }
+            Text("Показ открывайте прямо на доске (она сенсорная) — жмёте звуки/фото на ней. Телефоном-пультом отдельно не выйдет без платы/сервера.")
+                .font(Term.ru(12)).foregroundColor(Term.dim).fixedSize(horizontal: false, vertical: true)
+        }
+        .fullScreenCover(isPresented: $show) {
+            ZStack(alignment: .topTrailing) {
+                PadWeb(url: pad + hash).ignoresSafeArea()
+                Button { show = false } label: { Text("✕").font(.system(size: 28)).foregroundColor(.white).padding(16) }
+            }
+        }
+    }
+}
 
 /// Подвкладка «прошивка»: обновление прошивки донгла по Bluetooth (OTA). USB на iOS недоступен.
 struct FirmwarePanel: View {
