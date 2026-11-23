@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>krisa37™ Проверка связи</title>
+<link rel="icon" href="../favicon.png">
+<script src="../apptheme.js"></script>
+<style>
+body{margin:0;background:#050806;color:#7dff9a;font:16px/1.5 system-ui,sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:26px;margin:0 0 6px}.dim{color:#4c8a5b}
+.card{background:#0b120d;border:1px solid #1f3b27;border-radius:10px;padding:12px 14px;margin:10px 0;display:flex;justify-content:space-between;gap:10px}
+.ok{color:#22c55e;font-weight:600}.bad{color:#e05050;font-weight:600}.wait{color:#ffcc66}
+.big{display:block;width:100%;font:inherit;font-size:18px;background:#7dff9a;color:#04140a;border:0;border-radius:10px;padding:14px;margin:12px 0;cursor:pointer}
+#sum{font-family:ui-monospace,monospace;font-size:13px;white-space:pre-wrap}
+</style></head><body>
+<div class="wrap">
+  <h1>Проверка связи для «Шоу»</h1>
+  <p class="dim">Откройте эту страницу <b>без VPN</b> на компьютере/доске и на телефоне — она проверит, какие бесплатные серверы-«сводники» доступны из вашей сети. Пришлите скриншот результата.</p>
+  <button class="big" onclick="run()">▶ Проверить</button>
+  <div id="list"></div>
+  <p class="dim" id="sum"></p>
+</div>
+<script>
+var R=Math.random().toString(36).slice(2,8);
+var T=[
+  ['PeerJS (сейчас используется)','wss://0.peerjs.com/peerjs?key=peerjs&id=krisatest'+R+'&token='+R,null],
+  ['ntfy.sh','wss://ntfy.sh/krisa37test'+R+'/ws',null],
+  ['MQTT EMQX','wss://broker.emqx.io:8084/mqtt','mqtt'],
+  ['MQTT HiveMQ','wss://broker.hivemq.com:8884/mqtt','mqtt'],
+  ['MQTT Mosquitto','wss://test.mosquitto.org:8081','mqtt'],
+  ['MQTT Eclipse','wss://mqtt.eclipseprojects.io/mqtt','mqtt'],
+  ['Firebase (Google)','wss://s-usc1a-nss-2001.firebaseio.com/.ws?v=5&ns=demo',null]
+];
+function probe(url,proto){ return new Promise(function(res){
+  var t0=Date.now(), done=false, ws;
+  var fin=function(ok,why){ if(done)return; done=true; try{ws&&ws.close()}catch(e){} res({ok:ok,ms:Date.now()-t0,why:why}); };
+  try{ ws = proto ? new WebSocket(url,proto) : new WebSocket(url); }catch(e){ return fin(false,'ошибка'); }
+  ws.onopen=function(){ fin(true,'ok'); };
+  ws.onerror=function(){ fin(false,'нет связи'); };
+  ws.onclose=function(){ fin(false,'закрыто'); };
+  setTimeout(function(){ fin(false,'таймаут'); },7000);
+}); }
+async function run(){
+  var L=document.getElementById('list'); L.innerHTML=''; var out=[];
+  for(var i=0;i<T.length;i++){
+    var d=document.createElement('div'); d.className='card';
+    d.innerHTML='<span>'+T[i][0]+'</span><span class="wait">проверка…</span>'; L.appendChild(d);
+  }
+  var res=await Promise.all(T.map(function(t){ return probe(t[1],t[2]); }));
+  res.forEach(function(r,i){
+    var s=L.children[i].lastChild; s.className=r.ok?'ok':'bad';
+    s.textContent=r.ok?('✓ работает · '+r.ms+' мс'):('✗ '+r.why);
+    out.push((r.ok?'OK ':'-- ')+T[i][0]+(r.ok?' '+r.ms+'ms':' ('+r.why+')'));
+  });
+  document.getElementById('sum').textContent=navigator.userAgent.slice(0,60)+'\n'+out.join('\n');
+}
+run();
+</script></body></html>
