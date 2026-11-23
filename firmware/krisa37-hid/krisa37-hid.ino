@@ -58,6 +58,9 @@
 #else
 #define CHIP "s3"
 #endif
+#ifdef KRISA_SHOW
+#include "show_page.h"      // «всё в одном»: + Wi-Fi сервер показа (krisa37-show)
+#endif
 #define SERVICE_UUID "6b7e0001-3a1f-4c7e-9d2a-6b72697361a0"
 #define RX_UUID      "6b7e0002-3a1f-4c7e-9d2a-6b72697361a0"
 #define INFO_UUID    "6b7e0003-3a1f-4c7e-9d2a-6b72697361a0"
@@ -494,12 +497,19 @@ void setup() {
   adv->setScanResponse(true);
   BLEDevice::startAdvertising();
   LOG("ble ok, advertising\n");
+#ifdef KRISA_SHOW
+  showSetup();
+  LOG("show wi-fi ap up\n");
+#endif
 }
 
 uint32_t bootDown = 0;
 
 void loop() {
   uint32_t t = millis();
+#ifdef KRISA_SHOW
+  showLoop();
+#endif
   if (safeMode) {                               // мигаем причиной: жёлтый — питание, фиолетовый — сбой
     bool on = (t / 400) % 2;
     if (brownout) led(on ? 50 : 0, on ? 35 : 0, 0); else led(on ? 40 : 0, 0, on ? 40 : 0);

@@ -61,6 +61,14 @@ jobs:
           arduino-cli compile --fqbn "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=4M,PartitionScheme=default,PSRAM=opi" \
             --export-binaries --output-dir out-show firmware/krisa37-show
           cp out-show/krisa37-show.ino.merged.bin krisa37-show.bin
+      - name: Build «всё в одном» (HID + Шоу на одной плате, ESP32-S3 N16R8)
+        run: |
+          mkdir -p combo/krisa37-combo
+          cp firmware/krisa37-hid/types.h firmware/krisa37-hid/show_page.h combo/krisa37-combo/
+          { echo '#define KRISA_SHOW'; cat firmware/krisa37-hid/krisa37-hid.ino; } > combo/krisa37-combo/krisa37-combo.ino
+          arduino-cli compile --fqbn "esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default,FlashSize=4M,PartitionScheme=huge_app,PSRAM=opi" \
+            --export-binaries --output-dir out-combo combo/krisa37-combo
+          cp out-combo/krisa37-combo.ino.merged.bin krisa37-combo.bin
       - uses: actions/upload-artifact@v4
         with:
           name: krisa37-hid
@@ -74,3 +82,4 @@ jobs:
             krisa37-hid-c3-app.bin
             krisa37-hid-s3bt-app.bin
             krisa37-show.bin
+            krisa37-combo.bin

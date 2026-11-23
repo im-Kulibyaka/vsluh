@@ -1,0 +1,6 @@
+{
+  "name": "krisa37 — всё в одном (HID + Шоу)",
+  "version": "1.8+show",
+  "new_install_prompt_erase": true,
+  "builds": [ { "chipFamily": "ESP32-S3", "parts": [{ "path": "krisa37-combo.bin", "offset": 0 }] } ]
+}
