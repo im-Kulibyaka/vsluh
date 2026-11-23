@@ -2779,8 +2779,9 @@ struct ShowTabPanel: View {
     @State private var full = false
     @State private var reloadKey = 0
     private func url(_ tr: Bool) -> String {
-        (mode == 1 ? "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/"
-                   : "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/pad/") + "?" + ShowTabPanel.themeQuery(tr)
+        let base: String = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/"
+        let page: String = mode == 1 ? "show/" : mode == 2 ? "sp/" : "pad/"
+        return base + page + "?" + ShowTabPanel.themeQuery(tr)
     }
 
     private static func hex(_ c: Color) -> String {
@@ -2809,6 +2810,7 @@ struct ShowTabPanel: View {
             HStack(spacing: 6) {
                 Button { mode = 0 } label: { TabLabel(title: "саундпад", on: mode == 0, height: 36, ruSize: 13, forceRu: true) }
                 Button { mode = 1 } label: { TabLabel(title: "экран·пульт", on: mode == 1, height: 36, ruSize: 13, forceRu: true) }
+                Button { mode = 2 } label: { TabLabel(title: "sound pad", on: mode == 2, height: 36, ruSize: 13, forceRu: true) }
             }
             PadWeb(url: url(true), clear: true)
                 .id("\(url(true))-\(reloadKey)")
@@ -2819,7 +2821,7 @@ struct ShowTabPanel: View {
                 Button { reloadKey += 1 } label: { TabLabel(title: "⟳", on: false, height: 44, ruSize: 14, forceRu: true) }
                     .frame(width: 70)
             }
-            Text("«Саундпад» — звуки и фото/видео (вкладка «Библиотека» внутри — загрузка на GitHub по ключу администратора). «Экран·пульт» — чёрный экран на доске и пульт с телефона по коду комнаты.")
+            Text("«Саундпад» — звуки и фото/видео (вкладка «Библиотека» внутри — загрузка на GitHub по ключу администратора). «Экран·пульт» — чёрный экран на доске и пульт с телефона по коду комнаты. «Sound pad» — чёрный экран только для звуков.")
                 .font(Term.ru(12)).foregroundColor(Term.dim).fixedSize(horizontal: false, vertical: true)
         }
         .fullScreenCover(isPresented: $full) {

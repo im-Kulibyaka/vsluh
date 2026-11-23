@@ -1821,7 +1821,7 @@ class MainActivity : Activity() {
     private var webFileCb: android.webkit.ValueCallback<Array<android.net.Uri>>? = null
 
     /** Адрес страницы шоу с темой приложения: цвета, шрифт, заливка кнопок; tr — прозрачный фон (виден фон приложения). */
-    private fun showUrl(tr: Boolean = true) = (if (showMode == 1) SHOW_URL else PAD_URL) + "?" + themeQuery(tr)
+    private fun showUrl(tr: Boolean = true) = (when (showMode) { 1 -> SHOW_URL; 2 -> SP_URL; else -> PAD_URL }) + "?" + themeQuery(tr)
 
     private fun hex6(c: Int) = String.format("%06X", c and 0xFFFFFF)
     private fun themeQuery(tr: Boolean): String {
@@ -1876,8 +1876,8 @@ class MainActivity : Activity() {
     private fun buildShowPanel(): View {
         val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val prefs = getPreferences(MODE_PRIVATE)
-        showMode = prefs.getInt("show_mode", 0).coerceIn(0, 1)
-        p.addView(chipRow(listOf("саундпад", "экран·пульт"), showMode) { i, _ ->
+        showMode = prefs.getInt("show_mode", 0).coerceIn(0, 2)
+        p.addView(chipRow(listOf("саундпад", "экран·пульт", "sound pad"), showMode) { i, _ ->
             showMode = i; prefs.edit().putInt("show_mode", i).apply(); showWebLoad()
         }, LinearLayout.LayoutParams(-1, -2))
         val web = makeShowWeb().apply {
@@ -3274,6 +3274,7 @@ class MainActivity : Activity() {
         private const val FLASH_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/"
         private const val SHOW_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/"
         private const val PAD_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/pad/"
+        private const val SP_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/sp/"
         private const val REQ_FILE = 73
         private const val SHORT_URL = "https://clck.ru/3XBmBy"   // российский сокращатель (Яндекс) — работает без VPN
         private const val PREF_PROJ = "proj_brand"
