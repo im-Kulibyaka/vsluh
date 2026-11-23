@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Шоковая заморозка</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&family=Montserrat:wght@300;500;700&family=Neucha&display=swap&subset=cyrillic" rel="stylesheet">
+<style>
+/* VOICE: научный доклад, спокойный, точный, «мел на доске»
+   IDEA: школьная доска / инфографика «Atomic Theory» — чёрный фон, белые линии, рукописные формулы
+   PICTURE: на каждом слайде свой чертёж мелом: клетка, кристаллы, графики охлаждения
+   COLOUR and TYPE: чёрный #0d0d0d, мел #f2f2f2, серый #8a8a8a, ледяной акцент #9fd8ff; Montserrat + Caveat/Neucha (рукопись)
+   LAYOUT: горизонтальная лента слайдов со снапом, пунктирные рамки-карточки, формулы на фоне */
+:root{color-scheme:dark;--bg:#0d0d0d;--ink:#f2f2f2;--mut:#8a8a8a;--ice:#9fd8ff;--line:rgba(255,255,255,.35)}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:16px/1.5 Montserrat,system-ui,sans-serif;overflow:hidden}
+.deck{display:flex;height:100%;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
+.deck::-webkit-scrollbar{display:none}
+.s{flex:0 0 100%;height:100%;scroll-snap-align:start;position:relative;overflow-y:auto;padding:clamp(22px,4vw,56px) clamp(18px,5vw,72px) 90px}
+.bgf{position:absolute;inset:0;pointer-events:none;overflow:hidden;font-family:Caveat,cursive;color:rgba(255,255,255,.09);font-size:clamp(18px,2.2vw,28px);line-height:1.6;padding:20px;white-space:pre-wrap;word-spacing:30px}
+.in{position:relative;max-width:1180px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;justify-content:center;gap:22px}
+h1{font-weight:300;letter-spacing:.18em;font-size:clamp(28px,5vw,54px);line-height:1.1;margin:0;text-transform:uppercase}
+h2{font-weight:300;letter-spacing:.12em;font-size:clamp(22px,3.2vw,38px);margin:0;text-transform:uppercase}
+.sub{color:var(--mut);letter-spacing:.1em;font-size:13px;font-weight:500;text-transform:uppercase}
+.hand{font-family:Neucha,Caveat,cursive;font-size:clamp(18px,2vw,24px);line-height:1.35}
+.box{border:1px dashed var(--line);padding:18px 20px;position:relative}
+.box p{margin:6px 0}.txt{font-size:16px;line-height:1.6;color:#ddd;max-width:900px}
+.box h3{margin:0 0 8px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;font-size:15px;color:var(--mut)}
+.br{border-left:1px solid var(--ink);border-right:1px solid var(--ink);padding:4px 14px;display:inline-block}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:center}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.big{font-size:clamp(34px,5vw,60px);font-weight:300;line-height:1}
+.ice{color:var(--ice)}
+svg{width:100%;height:auto;display:block}
+svg .c{stroke:var(--ink);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+svg .t{fill:var(--ink);font-family:Neucha,cursive;font-size:18px}
+svg .m{fill:var(--mut);font-family:Montserrat;font-size:12px}
+ul{margin:0;padding-left:20px}li{margin:6px 0}
+.f{font-family:Caveat,cursive;font-size:clamp(24px,2.6vw,32px)}
+table{border-collapse:collapse;width:100%;font-size:15px}
+td,th{border-bottom:1px dashed var(--line);padding:9px 8px;text-align:left}
+th{color:var(--mut);font-weight:500}
+.nav{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;align-items:center;gap:14px;padding:12px;background:linear-gradient(transparent,#0d0d0d 50%)}
+.nav button{width:44px;height:44px;border:1px dashed var(--line);background:transparent;color:var(--ink);font-size:20px;cursor:pointer}
+.nav button:focus-visible{outline:2px solid var(--ice)}
+#num{font-family:Caveat;font-size:22px;min-width:70px;text-align:center}
+@media(max-width:760px){.g2,.g3{grid-template-columns:minmax(0,1fr)}.in{justify-content:flex-start}}
+@media(prefers-reduced-motion:no-preference){.s .in>*{animation:up .7s both}@keyframes up{from{opacity:0;transform:translateY(12px)}}}
+</style>
+</head>
+<body>
+<main class="deck" id="deck">
+
+<!-- 1 -->
+<section class="s"><div class="bgf">Q = c·m·ΔT   Q = λ·m   ΔG = ΔH − TΔS   r* = 2γT₀/(ΔH·ΔT)   J = A·exp(−ΔG*/kT)   v = ΔT/Δt   ρ = m/V   Q = c·m·ΔT   λ = 334 кДж/кг</div>
+<div class="in">
+ <div class="sub">Научная работа по физике</div>
+ <h1>Шоковая<br>заморозка</h1>
+ <div class="sub">Технология быстрого замораживания продуктов: предотвращение разрушения клеток крупными кристаллами льда</div>
+ <div class="g2">
+  <svg viewBox="0 0 400 260"><g class="c">
+   <ellipse cx="200" cy="130" rx="180" ry="60"/><ellipse cx="200" cy="130" rx="180" ry="60" transform="rotate(60 200 130)"/><ellipse cx="200" cy="130" rx="180" ry="60" transform="rotate(-60 200 130)"/>
+   <g stroke="#9fd8ff"><path d="M200 95v70M170 112l60 36M170 148l60-36"/><path d="M200 95l-8 8M200 95l8 8M200 165l-8-8M200 165l8-8"/></g>
+  </g><circle cx="20" cy="130" r="5" fill="#f2f2f2"/><circle cx="290" cy="52" r="5" fill="#f2f2f2"/><circle cx="110" cy="208" r="5" fill="#f2f2f2"/></svg>
+  <div class="box hand">Вода в продуктах — до 70–95 % массы.<br>От того, <span class="ice">как</span> она превратится в лёд, зависит качество продукта после разморозки.</div>
+ </div>
+ <p class="txt">Замораживание — один из самых распространённых способов долгого хранения пищи. Холод замедляет химические реакции и почти останавливает размножение микроорганизмов. Однако сам процесс превращения воды в лёд может повредить ткани продукта. В этой работе рассматривается, какие физические явления лежат в основе этого повреждения и почему быстрое охлаждение позволяет его избежать.</p>
+</div></section>
+
+<!-- 2 -->
+<section class="s"><div class="bgf">t° = −18 °C   t° = −35 °C   F = ma   p = F/S   ΔT/Δt</div>
+<div class="in">
+ <h2>Актуальность и цель</h2>
+ <div class="g2">
+  <div class="box"><h3>Проблема</h3><p class="hand">При обычной заморозке продукты после размораживания теряют сок, становятся «водянистыми», теряют вкус, витамины и форму.</p></div>
+  <div class="box"><h3>Цель работы</h3><p class="hand">Объяснить с точки зрения физики, почему быстрая заморозка сохраняет клетки, и оценить условия её эффективности.</p></div>
+ </div>
+ <div class="box"><h3>Задачи</h3><ul>
+  <li>Рассмотреть фазовый переход «вода → лёд» и теплоту кристаллизации</li>
+  <li>Изучить зарождение и рост кристаллов льда</li>
+  <li>Сравнить медленную и шоковую заморозку</li>
+  <li>Рассчитать энергию и время охлаждения на примере</li>
+ </ul></div>
+ <div class="box"><h3>Объект и предмет исследования</h3><p class="txt">Объект — процесс замораживания пищевых продуктов. Предмет — зависимость размера кристаллов льда и сохранности клеток от скорости отвода тепла. Методы: анализ литературы, теоретический расчёт по формулам термодинамики, сравнение технологий.</p></div>
+ <p class="txt">Сегодня шоковая заморозка применяется в ресторанах, на производствах полуфабрикатов, при заготовке рыбы, ягод и овощей. Понимание её физики помогает объяснить, почему «быстро» почти всегда означает «качественно».</p>
+</div></section>
+
+<!-- 3 -->
+<section class="s"><div class="bgf">Q₁ = c_воды·m·(t₀ − 0)   Q₂ = λm   Q₃ = c_льда·m·(0 − t)</div>
+<div class="in">
+ <h2>Физика кристаллизации</h2>
+ <div class="g2">
+  <svg viewBox="0 0 420 280"><g class="c">
+   <path d="M40 20v230h360"/><path d="M40 60 L120 140 L130 150 L260 150 L380 230" stroke="#9fd8ff"/>
+   <path d="M40 150h360" stroke-dasharray="4 6" stroke="#8a8a8a"/>
+  </g>
+  <text class="t" x="70" y="80">охлаждение воды</text><text class="t" x="150" y="140">плато: λ отдаётся</text><text class="t" x="270" y="190">лёд</text>
+  <text class="m" x="6" y="154">0 °C</text><text class="m" x="360" y="268">время</text><text class="m" x="8" y="18">t, °C</text></svg>
+  <div>
+   <div class="box"><h3>Три стадии отвода тепла</h3>
+    <p class="f">Q = c<sub>в</sub>m(t₀−t<sub>кр</sub>) + λm + c<sub>л</sub>m(t<sub>кр</sub>−t)</p>
+    <p class="hand">λ = 334 кДж/кг — теплота кристаллизации воды. Это самый «дорогой» этап.</p></div>
+   <p class="hand" style="color:var(--mut)">В клетках вода — раствор солей и сахаров, поэтому замерзает ниже 0 °C (−1…−2 °C).</p>
+  </div>
+ </div>
+ <p class="txt">Кристаллизация — фазовый переход первого рода. Пока вода замерзает, её температура почти не меняется: вся отводимая энергия идёт на перестройку молекул в упорядоченную кристаллическую решётку. Молекулы воды соединяются водородными связями в шестиугольную структуру — именно поэтому снежинки шестилучевые, а лёд легче воды. Удельная теплота кристаллизации воды очень велика по сравнению с её теплоёмкостью: чтобы заморозить 1 кг воды, нужно отнять столько же энергии, сколько для её охлаждения примерно на 80 °C.</p>
+ <div style="display:none"><div>
+  </div>
+ </div>
+</div></section>
+
+<!-- 4 -->
+<section class="s"><div class="bgf">J = A·exp(−ΔG*/kT)   ΔG* ~ 1/ΔT²   r* = 2γ/Δg</div>
+<div class="in">
+ <h2>Зарождение и рост кристаллов</h2>
+ <div class="g3">
+  <div class="box"><h3>Нуклеация</h3><p class="hand">Чем сильнее переохлаждение ΔT, тем больше центров кристаллизации возникает одновременно.</p><p class="f">J ∝ e<sup>−B/ΔT²</sup></p></div>
+  <div class="box"><h3>Рост</h3><p class="hand">Кристалл растёт, пока к нему подводится вода и отводится тепло. Медленно — значит долго растёт.</p></div>
+  <div class="box"><h3>Итог</h3><p class="hand">Быстро: <span class="ice">много мелких</span> кристаллов.<br>Медленно: <span class="ice">мало крупных</span>.</p></div>
+ </div>
+ <div class="box"><h3>Ключевой параметр — время прохождения зоны максимальной кристаллизации (−1…−5 °C)</h3>
+  <table><tr><th>Скорость</th><th>Время в зоне</th><th>Размер кристаллов</th></tr>
+  <tr><td>Медленная (бытовая)</td><td>несколько часов</td><td>≈ 50–100 мкм и крупнее</td></tr>
+  <tr><td>Шоковая</td><td>до ~30 мин</td><td>≈ 1–10 мкм</td></tr></table></div>
+ <p class="txt">Чтобы в жидкости появился зародыш кристалла, он должен достичь критического радиуса r*: меньшие зародыши снова растворяются, так как энергия их поверхности слишком велика. При сильном переохлаждении критический радиус уменьшается, и зародыши появляются по всему объёму сразу. Вода распределяется между огромным числом центров, и каждый кристалл остаётся маленьким. При медленном охлаждении зародышей мало, молекулы воды успевают переместиться к уже существующим кристаллам, и те разрастаются в длинные иглы.</p>
+</div></section>
+
+<!-- 5 -->
+<section class="s"><div class="bgf">π = cRT   осмос   Δp   ρ_льда = 917 кг/м³   ρ_воды = 1000 кг/м³</div>
+<div class="in">
+ <h2>Что происходит с клеткой</h2>
+ <div class="g2">
+  <div class="box"><h3>Медленная заморозка</h3>
+   <svg viewBox="0 0 300 200"><g class="c"><path d="M40 40 Q20 100 50 160 Q150 190 250 160 Q280 100 250 40 Q150 10 40 40Z"/>
+   <g stroke="#9fd8ff"><path d="M90 60l60 70M150 60l-60 70M80 95h80"/><path d="M190 90l50 55M240 90l-50 55"/></g>
+   <path d="M245 40l25-15M255 160l25 15M40 160l-25 15" stroke-dasharray="3 4"/></g>
+   <text class="t" x="70" y="195">мембрана разорвана</text></svg>
+   <p class="hand">Лёд образуется сначала между клетками → вода вытягивается осмосом → клетка сжимается, крупные иглы прокалывают оболочку.</p></div>
+  <div class="box"><h3>Шоковая заморозка</h3>
+   <svg viewBox="0 0 300 200"><g class="c"><path d="M40 40 Q20 100 50 160 Q150 190 250 160 Q280 100 250 40 Q150 10 40 40Z"/></g>
+   <g fill="#9fd8ff"><circle cx="80" cy="70" r="3"/><circle cx="110" cy="100" r="3"/><circle cx="150" cy="60" r="3"/><circle cx="190" cy="110" r="3"/><circle cx="220" cy="70" r="3"/><circle cx="90" cy="140" r="3"/><circle cx="140" cy="130" r="3"/><circle cx="200" cy="150" r="3"/><circle cx="170" cy="90" r="3"/><circle cx="120" cy="45" r="3"/><circle cx="235" cy="120" r="3"/><circle cx="60" cy="105" r="3"/></g>
+   <text class="t" x="80" y="195">клетка цела</text></svg>
+   <p class="hand">Лёд мелкий и равномерный — внутри и снаружи клетки одновременно. Мембрана не повреждается.</p></div>
+ </div>
+ <p class="hand" style="text-align:center">Плотность льда на ~9 % меньше плотности воды → при замерзании объём <span class="ice">растёт</span>, крупные кристаллы давят на стенки клеток.</p>
+ <p class="txt">Клетка окружена тонкой мембраной толщиной около 7–10 нм. Когда снаружи клетки образуется лёд, концентрация солей в оставшейся жидкости растёт, и по закону осмоса вода выходит из клетки наружу. Клетка обезвоживается и сжимается, а белки внутри неё могут денатурировать. При разморозке разорванные мембраны уже не удерживают сок — он вытекает, продукт теряет массу, вкус и упругость. Именно поэтому медленно замороженное мясо после разморозки «стоит в луже», а клубника превращается в кашу.</p>
+</div></section>
+
+<!-- 6 -->
+<section class="s"><div class="bgf">q = α·S·(T_пов − T_возд)   α ~ v^0.8   Bi = αL/λ</div>
+<div class="in">
+ <h2>Как устроен шкаф шоковой заморозки</h2>
+ <div class="g2">
+  <svg viewBox="0 0 400 280"><g class="c">
+   <rect x="40" y="20" width="320" height="240"/><path d="M40 70h320"/>
+   <circle cx="110" cy="45" r="16"/><path d="M110 29v32M94 45h32"/><circle cx="290" cy="45" r="16"/><path d="M290 29v32M274 45h32"/>
+   <path d="M80 120h240M80 170h240M80 220h240"/>
+   <g stroke="#9fd8ff"><path d="M60 95q40 10 80 0t80 0 80 0 80 0"/><path d="M60 145q40 10 80 0t80 0 80 0"/><path d="M60 195q40 10 80 0t80 0 80 0"/><path d="M330 92l10 3-10 5"/></g>
+  </g><text class="m" x="150" y="50">вентиляторы</text><text class="m" x="130" y="250">полки с продуктами</text></svg>
+  <div class="box"><h3>Принцип</h3><ul class="hand">
+   <li>Воздух −30…−40 °C</li>
+   <li>Скорость потока 3–6 м/с — растёт коэффициент теплоотдачи α</li>
+   <li>Продукт +70 °C → −18 °C в центре за ~4 ч (вместо ~12–24 ч)</li>
+   <li>Иные методы: криогенный (жидкий азот, −196 °C), контактный (плиты), флюидизационный</li></ul></div>
+ </div>
+ <p class="txt">Скорость заморозки определяется теплообменом на поверхности продукта и теплопроводностью внутри него. Неподвижный воздух — плохой проводник тепла, поэтому в обычной морозилке вокруг продукта образуется «тёплая подушка». Мощные вентиляторы постоянно сдувают этот слой, и коэффициент теплоотдачи растёт в несколько раз. Важна и толщина продукта: время заморозки примерно пропорционально квадрату толщины, поэтому мелкие ягоды и тонкие куски замораживаются быстрее всего. В криогенном методе жидкий азот кипит прямо на поверхности продукта, отбирая тепло с огромной скоростью.</p>
+</div></section>
+
+<!-- 7 -->
+<section class="s"><div class="bgf">Q = c·m·ΔT + λm   P = Q/t   c_в = 4200 Дж/(кг·°C)   c_л = 2100 Дж/(кг·°C)</div>
+<div class="in">
+ <h2>Расчёт: 1 кг ягод (вода ≈ 85 %)</h2>
+ <div class="g2">
+  <div class="box">
+   <p class="f">m<sub>в</sub> = 0,85 кг; t₀ = 20 °C → t = −18 °C</p>
+   <p class="f">Q₁ = 4200·0,85·20 ≈ 71 кДж</p>
+   <p class="f">Q₂ = 334 000·0,85 ≈ 284 кДж</p>
+   <p class="f">Q₃ = 2100·0,85·18 ≈ 32 кДж</p>
+   <p class="f ice">Q ≈ 387 кДж</p>
+  </div>
+  <div class="g3" style="grid-template-columns:minmax(0,1fr)">
+   <div class="box"><div class="big">73 %</div><p class="hand">энергии уходит на сам фазовый переход</p></div>
+   <div class="box"><div class="big">≈ 107 Вт</div><p class="hand">средняя мощность отвода тепла при шоковой заморозке за 1 час</p></div>
+   <div class="box"><div class="big">≈ 9 Вт</div><p class="hand">при бытовой заморозке за 12 часов</p></div>
+  </div>
+ </div>
+ <p class="txt">Расчёт показывает, что основная часть энергии уходит не на понижение температуры, а на сам фазовый переход. Общее количество теплоты одинаково при любом способе — меняется только время. Мощность P = Q/t при шоковой заморозке в 12 раз выше, поэтому для неё нужны мощные компрессоры и вентиляторы. Зато продукт проходит зону кристаллизации за минуты, а не за часы.</p>
+ <p class="sub">Упрощённая модель: вклад сухого вещества не учитывается</p>
+</div></section>
+
+<!-- 8 -->
+<section class="s"><div class="bgf">Δm/m · 100 %   η = Q_пол/Q_затр</div>
+<div class="in">
+ <h2>Сравнение результатов</h2>
+ <div class="box"><table>
+  <tr><th>Показатель</th><th>Обычная</th><th>Шоковая</th></tr>
+  <tr><td>Потеря сока при разморозке</td><td>до 6–10 %</td><td class="ice">1–3 %</td></tr>
+  <tr><td>Структура и форма</td><td>разрушается</td><td class="ice">сохраняется</td></tr>
+  <tr><td>Витамины и вкус</td><td>заметные потери</td><td class="ice">близки к свежему</td></tr>
+  <tr><td>Рост микроорганизмов при охлаждении</td><td>долгое время в «опасной зоне»</td><td class="ice">зона проходится быстро</td></tr>
+  <tr><td>Затраты энергии</td><td>ниже мощность</td><td>выше мощность, короче цикл</td></tr>
+ </table></div>
+ <p class="txt">Шоковая заморозка дороже по оборудованию и требует больше мощности, но окупается качеством: продукты дольше хранятся, лучше выглядят и меньше теряют в массе. Кроме того, быстрое охлаждение готовых блюд с +70 до +3 °C за 90 минут — обязательное санитарное требование во многих странах, так как бактерии активнее всего размножаются в диапазоне +10…+60 °C.</p>
+ <p class="sub">Значения потерь — типичные диапазоны из отраслевых источников, зависят от продукта</p>
+</div></section>
+
+<!-- 9 -->
+<section class="s"><div class="bgf">ΔT ↑ ⇒ J ↑ ⇒ r ↓</div>
+<div class="in">
+ <h2>Выводы</h2>
+ <div class="box"><span class="br hand">Чем быстрее отводится тепло, тем больше центров кристаллизации и тем мельче лёд.</span></div>
+ <div class="g3">
+  <div class="box"><div class="big">1</div><p class="hand">Главный энергетический барьер — теплота кристаллизации λ.</p></div>
+  <div class="box"><div class="big">2</div><p class="hand">Быстрое прохождение зоны −1…−5 °C даёт кристаллы ≈ 1–10 мкм, не повреждающие мембраны.</p></div>
+  <div class="box"><div class="big">3</div><p class="hand">Шоковая заморозка сохраняет сок, текстуру и пищевую ценность продуктов.</p></div>
+ </div>
+ <p class="txt">Работа показала, что сохранность продуктов при заморозке — прямое следствие законов физики: термодинамики фазовых переходов, кинетики зарождения кристаллов, осмоса и теплообмена. Применяя эти знания, инженеры создали технологию, которая позволяет сохранить продукт почти таким же, каким он был до заморозки. Полученные выводы можно применить и дома: замораживать продукты небольшими порциями, тонким слоем и на максимальной мощности морозильника.</p>
+ <p class="hand" style="text-align:center;color:var(--mut)">“Секрет качества — не в холоде, а в скорости.”</p>
+ <p class="sub" style="text-align:center">Спасибо за внимание</p>
+</div></section>
+
+</main>
+<nav class="nav"><button id="pv" aria-label="Назад">‹</button><span id="num">1 / 9</span><button id="nx" aria-label="Вперёд">›</button></nav>
+<script>
+{const d=document.getElementById('deck'),S=[...d.children],n=document.getElementById('num');
+const cur=()=>Math.round(d.scrollLeft/d.clientWidth);
+const go=i=>{i=Math.max(0,Math.min(S.length-1,i));S[i].scrollIntoView({behavior:'smooth',inline:'start'})};
+document.getElementById('pv').onclick=()=>go(cur()-1);
+document.getElementById('nx').onclick=()=>go(cur()+1);
+addEventListener('keydown',e=>{if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();go(cur()+1)}if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();go(cur()-1)}});
+d.addEventListener('scroll',()=>n.textContent=(cur()+1)+' / '+S.length);}
+</script>
+</body>
+</html>
