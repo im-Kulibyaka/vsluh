@@ -108,6 +108,8 @@ struct ContentView: View {
                     TouchpadPanel(model: model).padding(.top, 12)
                 } else if tab == "lib" {
                     LibraryPanel(model: model).padding(.top, 12)
+                } else if tab == "show" {
+                    ShowTabPanel().padding(.top, 12)
                 } else {
                     boardsArea.padding(.top, 12)
                 }
@@ -137,7 +139,7 @@ struct ContentView: View {
             }
             Spacer()
             Button {
-                if let u = URL(string: "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/") { UIApplication.shared.open(u) }
+                remote = "show"
             } label: { headerLabel(Term.prism ? "▣" : "[▣]", width: 52) }
             .padding(.top, 10)
             .accessibilityLabel("Шоу-экран")
@@ -557,6 +559,9 @@ extension ContentView {
         if tab == "lib" {
             return "библиотека :: ИК-пульты"
         }
+        if tab == "show" {
+            return "шоу :: саундпад, фото и видео"
+        }
         if tab == "scripts" {
             let list: [KScript] = ScriptStore.load(scriptsJSON)
             let i: Int = min(max(scriptCur, 0), list.count - 1)
@@ -584,7 +589,7 @@ extension ContentView {
     /// Вкладка: id, подпись и вес ширины (длина подписи + 2.5).
     typealias TabSpec = (id: String, title: String, weight: CGFloat)
 
-    private static let tabs1: [TabSpec] = [("boards", "Доски", 7.5), ("proj", "Проекторы", 11.5), ("ac", "Кондиционеры", 14.5)]
+    private static let tabs1: [TabSpec] = [("boards", "Доски", 7.5), ("proj", "Проекторы", 11.5), ("ac", "Кондиционеры", 14.5), ("show", "Шоу", 6.5)]
     private static let tabs2: [TabSpec] = [("scripts", "Сценарии", 10.5), ("touchpad", "Тачпад", 8.5), ("lib", "Библиотека", 12.5), ("color", "Цвет", 6.5)]
 
     private func tabRow(_ tabs: [TabSpec], width: CGFloat) -> some View {
@@ -738,6 +743,8 @@ struct HelpWeb: UIViewRepresentable {
 /// Веб-экран со страницей по URL (например, «Саундпад и показ» /pad/). Наш сайт — внутри, прочие ссылки — в Safari.
 struct PadWeb: UIViewRepresentable {
     let url: String
+    /// Прозрачный фон: сквозь страницу виден фон темы приложения.
+    var clear: Bool = false
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -758,8 +765,8 @@ struct PadWeb: UIViewRepresentable {
         web.navigationDelegate = context.coordinator
         web.uiDelegate = context.coordinator
         web.isOpaque = false
-        web.backgroundColor = .black
-        web.scrollView.backgroundColor = .black
+        web.backgroundColor = clear ? .clear : .black
+        web.scrollView.backgroundColor = clear ? .clear : .black
         if let u = URL(string: url) { web.load(URLRequest(url: u)) }
         return web
     }

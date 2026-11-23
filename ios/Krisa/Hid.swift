@@ -826,8 +826,6 @@ struct TouchpadPanel: View {
                 PresenterPanel(model: model)
             } else if sub == 6 {
                 FirmwarePanel(model: model)
-            } else if sub == 7 {
-                ShowLibPanel()
             } else {
                 touchArea
             }
@@ -854,7 +852,6 @@ struct TouchpadPanel: View {
                 subChip(4, "геймпад")
                 subChip(5, "презентер")
                 subChip(6, "прошивка")
-                subChip(7, "библиотека")
             }
         }
     }
@@ -2776,26 +2773,59 @@ struct PresenterPanel: View {
 
 // MARK: - Прошивка (OTA)
 
-/// Подвкладка «библиотека»: саундпад и показ с выгрузкой на GitHub — встроенный веб-экран (/pad/).
-struct ShowLibPanel: View {
-    @State private var show = false
-    @State private var hash = "#lib"
-    private let pad = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/pad/"
+/// Вкладка «Шоу»: саундпад и показ (/pad/, с «Библиотекой» внутри) или экран/пульт по коду (/show/).
+struct ShowTabPanel: View {
+    @AppStorage("show_mode") private var mode = 0
+    @State private var full = false
+    @State private var reloadKey = 0
+    private func url(_ tr: Bool) -> String {
+        (mode == 1 ? "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/"
+                   : "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/pad/") + "?" + ShowTabPanel.themeQuery(tr)
+    }
+
+    private static func hex(_ c: Color) -> String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(c).getRed(&r, green: &g, blue: &b, alpha: &a)
+        func n(_ v: CGFloat) -> Int { Int((min(max(v, 0), 1) * 255).rounded()) }
+        return String(format: "%02X%02X%02X", n(r), n(g), n(b))
+    }
+
+    /// Тема приложения для встроенной страницы шоу (цвета, шрифт, заливка кнопок); tr — прозрачный фон.
+    static func themeQuery(_ tr: Bool) -> String {
+        let t: String = Term.prism ? "prism" : Term.thermal ? "thermal" : Term.blueprint ? "blueprint" : "terminal"
+        let ink: String = Term.prism ? "120E1F" : Term.thermal ? hex(Heat.ink) : Term.blueprint ? hex(Term.bg) : "000000"
+        let panel: String = Term.prism ? "FFFFFF1E" : Term.thermal ? "000000AA" : Term.blueprint ? hex(Term.bg) + "C7" : "000000FF"
+        let line: String = Term.thermal ? hex(Heat.yellow) : hex(Term.line)
+        let on: [String] = Term.prism ? Prism.irisHex.prefix(5).map { String(format: "%06X", $0) }
+            : Term.thermal ? [hex(Heat.color(0.55)), hex(Heat.color(0.72)), hex(Heat.color(0.86))]
+            : [hex(Term.fg)]
+        var q: String = "app=1&t=\(t)&fg=\(hex(Term.fg))&dim=\(hex(Term.dim))&line=\(line)&ink=\(ink)"
+        q += "&panel=\(panel)&bg=\(hex(Term.bg))&on=\(on.joined(separator: ","))"
+        if tr { q += "&tr=1" }
+        return q
+    }
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Библиотека показа: саундпад и фото/видео. Файлы хранятся на GitHub, показ — на странице «Саундпад и показ».")
-                .font(Term.ru(13)).foregroundColor(Term.dim).fixedSize(horizontal: false, vertical: true)
-            Button { hash = "#lib"; show = true } label: { TabLabel(title: "📚 Библиотека (загрузка на GitHub)", on: true, height: 52, ruSize: 16, forceRu: true) }
-            Text("Добавить звук/фото/видео → загрузится в репозиторий (нужен ваш GitHub-токен, вводится один раз внутри). Через ~1 мин появится в показе.")
-                .font(Term.ru(12)).foregroundColor(Term.dim).fixedSize(horizontal: false, vertical: true)
-            Button { hash = ""; show = true } label: { TabLabel(title: "▶ Открыть показ", on: false, height: 52, ruSize: 16, forceRu: true) }
-            Text("Показ открывайте прямо на доске (она сенсорная) — жмёте звуки/фото на ней. Телефоном-пультом отдельно не выйдет без платы/сервера.")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Button { mode = 0 } label: { TabLabel(title: "саундпад", on: mode == 0, height: 36, ruSize: 13, forceRu: true) }
+                Button { mode = 1 } label: { TabLabel(title: "экран·пульт", on: mode == 1, height: 36, ruSize: 13, forceRu: true) }
+            }
+            PadWeb(url: url(true), clear: true)
+                .id("\(url(true))-\(reloadKey)")
+                .frame(height: UIScreen.main.bounds.height * 0.72)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            HStack(spacing: 6) {
+                Button { full = true } label: { TabLabel(title: "⛶ на весь экран", on: false, height: 44, ruSize: 14, forceRu: true) }
+                Button { reloadKey += 1 } label: { TabLabel(title: "⟳", on: false, height: 44, ruSize: 14, forceRu: true) }
+                    .frame(width: 70)
+            }
+            Text("«Саундпад» — звуки и фото/видео (вкладка «Библиотека» внутри — загрузка на GitHub по ключу администратора). «Экран·пульт» — чёрный экран на доске и пульт с телефона по коду комнаты.")
                 .font(Term.ru(12)).foregroundColor(Term.dim).fixedSize(horizontal: false, vertical: true)
         }
-        .fullScreenCover(isPresented: $show) {
+        .fullScreenCover(isPresented: $full) {
             ZStack(alignment: .topTrailing) {
-                PadWeb(url: pad + hash).ignoresSafeArea()
-                Button { show = false } label: { Text("✕").font(.system(size: 28)).foregroundColor(.white).padding(16) }
+                PadWeb(url: url(false)).ignoresSafeArea()
+                Button { full = false } label: { Text("✕").font(.system(size: 28)).foregroundColor(.white).padding(16) }
             }
         }
     }

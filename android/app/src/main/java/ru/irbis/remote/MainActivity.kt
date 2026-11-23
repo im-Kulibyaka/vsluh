@@ -329,7 +329,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             background = Term.boxBg(this@MainActivity)
             contentDescription = "Шоу-экран"
-            setOnClickListener { glitch(it); openExternal(android.net.Uri.parse(SHOW_URL)) }
+            setOnClickListener { glitch(it); showTab(TAB_SHOW) }
             setOnLongClickListener {
                 val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
                 cm.setPrimaryClip(android.content.ClipData.newPlainText("krisa37", SHORT_URL))
@@ -357,9 +357,10 @@ class MainActivity : Activity() {
         tabScripts = ruTab("Сценарии", TAB_SCRIPTS)
         tabTouch = ruTab("Тачпад", TAB_TOUCH)
         tabLib = ruTab("Библиотека", TAB_LIB)
-        // два ряда вкладок: устройства сверху, «Сценарии», «Рулетка», «Цвет» и «Библиотека» — во втором; ширина — по длине подписи
+        tabShow = ruTab("Шоу", TAB_SHOW)
+        // два ряда вкладок: устройства и «Шоу» сверху, «Сценарии», «Рулетка», «Цвет» и «Библиотека» — во втором; ширина — по длине подписи
         val tabs2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
-        for ((row, list) in listOf(tabs to listOf(tabBoards, tabProj, tabAc), tabs2 to listOf(tabScripts, tabTouch, tabRoulette, tabColor!!, tabLib))) {
+        for ((row, list) in listOf(tabs to listOf(tabBoards, tabProj, tabAc, tabShow), tabs2 to listOf(tabScripts, tabTouch, tabRoulette, tabColor!!, tabLib))) {
             list.forEachIndexed { i, t ->
                 row.addView(t, LinearLayout.LayoutParams(0, dp(40), t.text.length + 2.5f).apply { if (i > 0) leftMargin = dp(4) })
             }
@@ -383,6 +384,8 @@ class MainActivity : Activity() {
         root.addView(colorPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         libPanel = buildLibPanel()
         root.addView(libPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        showPanel = buildShowPanel()
+        root.addView(showPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         val prefs = getPreferences(MODE_PRIVATE)
         // старые вкладки IRBIS / MocTec теперь подвкладки «Досок»
         val start = when (val t = prefs.getString(PREF_TAB, null)) {
@@ -504,6 +507,9 @@ class MainActivity : Activity() {
         if (::tabLib.isInitialized) styleTab(tabLib, tab == TAB_LIB)
         if (::libPanel.isInitialized) libPanel.visibility = if (tab == TAB_LIB) View.VISIBLE else View.GONE
         if (tab == TAB_LIB) loadLibIndex()
+        if (::tabShow.isInitialized) styleTab(tabShow, tab == TAB_SHOW)
+        if (::showPanel.isInitialized) showPanel.visibility = if (tab == TAB_SHOW) View.VISIBLE else View.GONE
+        if (tab == TAB_SHOW) showWebLoad()
         subtitle.text = when (tab) {
             TAB_BOARDS -> boardSubtitle()
             TAB_AC -> acSubtitle()
@@ -513,6 +519,7 @@ class MainActivity : Activity() {
             TAB_PROJ -> PROJECTORS[projIdx].let { "проектор :: ${it.brand} :: ${projSource(it)}" }
             TAB_COLOR -> if (Term.thermal) "thermal :: palette" else if (Term.blueprint) "blueprint :: оттенок" else if (Term.prism) "призма :: стекло и свет" else "terminal :: phosphor color"
             TAB_LIB -> "библиотека :: ${libCat ?: "пультов"}${libBrand?.let { " :: $it" } ?: ""}"
+            TAB_SHOW -> "шоу :: саундпад, фото и видео"
             else -> boardSubtitle()
         }
         getPreferences(MODE_PRIVATE).edit().putString(PREF_TAB, tab).apply()
@@ -1437,8 +1444,7 @@ class MainActivity : Activity() {
         val padPage = buildGamepadPage()
         val presPage = buildPresenterPage()
         val fwPage = buildFirmwarePage()
-        val showLibPage = buildShowLibPage()
-        val subPages = listOf(p, ledPage, scrPage, tvPage, padPage, presPage, fwPage, showLibPage)
+        val subPages = listOf(p, ledPage, scrPage, tvPage, padPage, presPage, fwPage)
         val sub = prefs.getInt("touch_sub", 0).coerceIn(0, subPages.size - 1)
         val subViews = ArrayList<TextView>()
         fun showSub(i: Int) {
@@ -1446,7 +1452,7 @@ class MainActivity : Activity() {
             subPages.forEachIndexed { k, v -> v.visibility = if (k == i) View.VISIBLE else View.GONE }
             if (i != 4) hid?.gamepadNeutral()          // ушли с геймпада — всё отпустить
         }
-        val subLabels = listOf("тачпад", "светодиод", "скрипт", "ТВ", "геймпад", "презентер", "прошивка", "библиотека")
+        val subLabels = listOf("тачпад", "светодиод", "скрипт", "ТВ", "геймпад", "презентер", "прошивка")
         subLabels.forEachIndexed { i, l ->
             subViews += tabButton(l) { showSub(i); prefs.edit().putInt("touch_sub", i).apply() }
                 .apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 11.5f else 14f) }
@@ -1805,45 +1811,87 @@ class MainActivity : Activity() {
         return p
     }
 
-    /* ---------- «Тачпад» → «библиотека»: саундпад и показ с выгрузкой на GitHub (встроенный веб-экран) ---------- */
+    /* ---------- Вкладка «Шоу»: саундпад, показ фото/видео, библиотека (GitHub), экран/пульт по коду ---------- */
 
+    private lateinit var tabShow: TextView
+    private lateinit var showPanel: View
+    private var showWeb: android.webkit.WebView? = null
+    private var showMode = 0          // 0 — саундпад и показ (/pad/), 1 — экран/пульт по коду (/show/)
+    private var showLoaded = -1
     private var webFileCb: android.webkit.ValueCallback<Array<android.net.Uri>>? = null
 
-    private fun buildShowLibPage(): View {
+    /** Адрес страницы шоу с темой приложения: цвета, шрифт, заливка кнопок; tr — прозрачный фон (виден фон приложения). */
+    private fun showUrl(tr: Boolean = true) = (if (showMode == 1) SHOW_URL else PAD_URL) + "?" + themeQuery(tr)
+
+    private fun hex6(c: Int) = String.format("%06X", c and 0xFFFFFF)
+    private fun themeQuery(tr: Boolean): String {
+        val t = if (Term.prism) "prism" else if (Term.thermal) "thermal" else if (Term.blueprint) "blueprint" else "terminal"
+        val panel = when { Term.prism -> Color.argb(30, 255, 255, 255); Term.thermal -> Color.argb(170, 0, 0, 0); Term.blueprint -> Blueprint.PANEL; else -> Color.BLACK }
+        val line = if (Term.thermal) Heat.YELLOW else Term.LINE
+        val on = when {
+            Term.prism -> Term.IRIS.take(5)
+            Term.thermal -> listOf(Heat.color(0.55f), Heat.color(0.72f), Heat.color(0.86f))
+            else -> listOf(Term.FG)
+        }.joinToString(",") { hex6(it) }
+        return "app=1&t=$t&fg=${hex6(Term.FG)}&dim=${hex6(Term.DIM)}&line=${hex6(line)}&ink=${hex6(Term.onBoxText())}" +
+            "&panel=${hex6(panel)}${String.format("%02X", (panel ushr 24) and 0xFF)}&bg=${hex6(Term.BG)}&on=$on" + (if (tr) "&tr=1" else "")
+    }
+
+    /** WebView со страницами шоу: JS, localStorage (токен), выбор файлов из галереи; наш сайт — внутри, прочее — в браузер. */
+    private fun makeShowWeb(): android.webkit.WebView = android.webkit.WebView(this).apply {
+        setBackgroundColor(Color.BLACK)
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.mediaPlaybackRequiresUserGesture = false
+        webChromeClient = object : android.webkit.WebChromeClient() {
+            override fun onShowFileChooser(wv: android.webkit.WebView?, cb: android.webkit.ValueCallback<Array<android.net.Uri>>?, params: FileChooserParams?): Boolean {
+                webFileCb?.onReceiveValue(null); webFileCb = cb
+                return try { startActivityForResult(params!!.createIntent(), REQ_FILE); true } catch (e: Exception) { webFileCb = null; false }
+            }
+        }
+        webViewClient = object : android.webkit.WebViewClient() {
+            override fun shouldOverrideUrlLoading(v: android.webkit.WebView, r: android.webkit.WebResourceRequest): Boolean {
+                val u = r.url
+                if ((u.scheme == "http" || u.scheme == "https") && u.host == "mikhailkulinskii1910-jpg.github.io") return false
+                if (u.scheme == "http" || u.scheme == "https") { openExternal(u); return true }
+                return false
+            }
+        }
+        setDownloadListener { url, _, _, _, _ -> openExternal(android.net.Uri.parse(url)) }
+    }
+
+    private fun buildShowPanel(): View {
         val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        fun big(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 15f else 18f) }
-        p.addView(text("Библиотека показа: саундпад и фото/видео. Файлы хранятся на GitHub, показ — на странице «Саундпад и показ».", 14f, Term.FG).apply { typeface = Term.ru; setPadding(dp(4), dp(8), 0, dp(4)) })
-        p.addView(big("[ 📚 Библиотека (загрузка на GitHub) ]") { showLibrary("#lib") }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
-        p.addView(text("Добавить звук/фото/видео → загрузится в репозиторий (нужен ваш GitHub-токен, вводится один раз внутри). Через ~1 мин появится в показе.", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(4), 0, dp(10)) })
-        p.addView(big("[ ▶ Открыть показ ]") { showLibrary("") }, LinearLayout.LayoutParams(-1, dp(52)))
-        p.addView(text("Показ открывайте прямо на доске (она сенсорная) — жмёте звуки/фото на ней. Телефоном-пультом отдельно не выйдет без платы/сервера.", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(6), 0, 0) })
+        val prefs = getPreferences(MODE_PRIVATE)
+        showMode = prefs.getInt("show_mode", 0).coerceIn(0, 1)
+        p.addView(chipRow(listOf("саундпад", "экран·пульт"), showMode) { i, _ ->
+            showMode = i; prefs.edit().putInt("show_mode", i).apply(); showWebLoad()
+        }, LinearLayout.LayoutParams(-1, -2))
+        val web = makeShowWeb().apply {
+            setBackgroundColor(Color.TRANSPARENT)   // сквозь страницу виден фон темы (лог, «Матрица», призма, чертёж)
+            // страница прокручивается внутри, а не вся вкладка
+            setOnTouchListener { v, _ -> v.parent?.requestDisallowInterceptTouchEvent(true); false }
+        }
+        showWeb = web
+        val h = (resources.displayMetrics.heightPixels * 0.78f).toInt()
+        p.addView(web, LinearLayout.LayoutParams(-1, h).apply { topMargin = dp(8) })
+        fun btn(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 13f else 15f) }
+        p.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(btn("[ ⛶ на весь экран ]") { showFullWeb(showUrl(false)) }, LinearLayout.LayoutParams(0, dp(46), 1.4f))
+            addView(btn("[ ⟳ ]") { showWeb?.reload() }, LinearLayout.LayoutParams(0, dp(46), 0.6f).apply { leftMargin = dp(6) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        p.addView(text("«Саундпад» — звуки и фото/видео (вкладка «Библиотека» внутри — загрузка на GitHub по ключу администратора). «Экран·пульт» — чёрный экран на доске и пульт с телефона по коду комнаты.", 12f, Term.DIM).apply {
+            typeface = Term.ru; setPadding(dp(4), dp(6), 0, 0) })
         return p
     }
 
-    /** Встроенный веб-экран со страницей «Саундпад и показ» (/pad/). Токен и загрузка — внутри страницы. */
-    private fun showLibrary(hash: String) {
+    private fun showWebLoad() { val w = showWeb ?: return; if (showLoaded != showMode) { showLoaded = showMode; w.loadUrl(showUrl()) } }
+
+    /** Та же страница шоу на весь экран (для доски/ТВ). */
+    private fun showFullWeb(url: String) {
         val d = android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
-        val web = android.webkit.WebView(this).apply {
-            setBackgroundColor(Color.BLACK)
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true          // нужен для хранения токена (localStorage)
-            webChromeClient = object : android.webkit.WebChromeClient() {
-                override fun onShowFileChooser(wv: android.webkit.WebView?, cb: android.webkit.ValueCallback<Array<android.net.Uri>>?, params: FileChooserParams?): Boolean {
-                    webFileCb?.onReceiveValue(null); webFileCb = cb
-                    return try { startActivityForResult(params!!.createIntent(), REQ_FILE); true } catch (e: Exception) { webFileCb = null; false }
-                }
-            }
-            webViewClient = object : android.webkit.WebViewClient() {
-                override fun shouldOverrideUrlLoading(v: android.webkit.WebView, r: android.webkit.WebResourceRequest): Boolean {
-                    val u = r.url
-                    if ((u.scheme == "http" || u.scheme == "https") && u.host == "mikhailkulinskii1910-jpg.github.io") return false   // наш сайт — внутри
-                    if (u.scheme == "http" || u.scheme == "https") { openExternal(u); return true }
-                    return false
-                }
-            }
-            setDownloadListener { url, _, _, _, _ -> openExternal(android.net.Uri.parse(url)) }
-            loadUrl(PAD_URL + hash)
-        }
+        val web = makeShowWeb().apply { loadUrl(url) }
         d.setContentView(web)
         d.setOnKeyListener { _, code, ev ->
             if (code == android.view.KeyEvent.KEYCODE_BACK && ev.action == android.view.KeyEvent.ACTION_UP && web.canGoBack()) { web.goBack(); true } else false
@@ -3208,6 +3256,7 @@ class MainActivity : Activity() {
         private const val TAB_PROJ = "proj"
         private const val TAB_TOUCH = "touch"
         private const val TAB_LIB = "lib"
+        private const val TAB_SHOW = "show"
         private const val REQ_BT = 38
         private const val FLASH_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/"
         private const val SHOW_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/"
