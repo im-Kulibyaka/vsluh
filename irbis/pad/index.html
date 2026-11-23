@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ru"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>krisa37™ Саундпад и показ</title>
+<meta name="description" content="Саундпад и показ фото/видео: библиотека хранится на GitHub, управление с того же устройства.">
+<link rel="icon" href="../favicon.png">
+<style>
+@font-face{font-family:VT323;src:url(../vt323.ttf)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#050806;color:#7dff9a;font:16px/1.5 system-ui,-apple-system,Roboto,sans-serif;overscroll-behavior:none}
+.wrap{max-width:760px;margin:0 auto;padding:20px 16px 70px}
+h1{font-family:VT323,monospace;font-size:40px;line-height:1;margin:0 0 4px}
+.dim{color:#4c8a5b}.warn{color:#ffcc66}
+button{font:inherit;cursor:pointer}
+a{color:#7dff9a}
+.tabs{display:flex;gap:8px;margin:10px 0}
+.tab{flex:1;background:#0b120d;border:1px solid #1f3b27;color:#7dff9a;border-radius:10px;padding:12px;font-family:VT323,monospace;font-size:20px}
+.tab.on{background:#7dff9a;color:#04140a}
+.card{background:#0b120d;border:1px solid #1f3b27;border-radius:12px;padding:14px;margin:12px 0}
+.big{display:block;width:100%;font-size:18px;background:#7dff9a;color:#04140a;border:0;border-radius:10px;padding:16px;margin:8px 0}
+.ghost{background:transparent;color:#7dff9a;border:1px solid #1f3b27;border-radius:10px;padding:13px}
+.row{display:flex;gap:8px}.row>*{flex:1}
+input{font:inherit;width:100%;background:#050806;color:#7dff9a;border:1px solid #1f3b27;border-radius:8px;padding:11px;margin:4px 0}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.snd{position:relative;background:#0b120d;border:1px solid #1f3b27;color:#7dff9a;border-radius:10px;padding:16px 8px;min-height:62px;font-size:14px;word-break:break-word}
+.snd:active{background:#7dff9a;color:#04140a}.snd .x{position:absolute;top:1px;right:7px;color:#4c8a5b;font-size:18px}
+.gal{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.item{position:relative;background:#0b120d;border:1px solid #1f3b27;border-radius:10px;overflow:hidden}
+.item img,.item video{width:100%;height:92px;object-fit:cover;display:block}
+.item .cap{padding:6px 8px;font-size:13px}.item .x{position:absolute;top:2px;right:8px;color:#fff;background:#0009;border-radius:6px;padding:0 6px}
+label.file input{display:none}
+.st{font-family:ui-monospace,monospace;font-size:13px;margin-top:6px}
+#full{position:fixed;inset:0;background:#000;display:none;align-items:center;justify-content:center;z-index:50}
+#full img,#full video{max-width:100%;max-height:100%}
+#full .close{position:absolute;top:12px;right:16px;color:#fff8;font-size:30px;background:none;border:0}
+#prog{height:6px;background:#1f3b27;border-radius:4px;overflow:hidden;margin-top:8px;display:none}#prog>i{display:block;height:100%;width:0;background:#7dff9a}
+</style></head><body>
+
+<div class="wrap">
+  <p class="dim"><a href="../">← krisa37™</a></p>
+  <h1>Саундпад и показ</h1>
+  <div class="tabs">
+    <button class="tab on" id="tShow" onclick="tab('show')">Показ</button>
+    <button class="tab" id="tLib" onclick="tab('lib')">Библиотека</button>
+  </div>
+
+  <!-- ПОКАЗ -->
+  <div id="show">
+    <div class="row" style="margin-bottom:8px">
+      <label class="file"><span class="ghost" style="display:block;text-align:center">🖼 Показать с устройства</span>
+        <input type="file" accept="image/*,video/*" onchange="localShow(this)"></label>
+      <button class="ghost" onclick="refresh()">⟳ Обновить</button>
+    </div>
+    <div class="card"><div class="dim" style="margin-bottom:8px">Саундпад</div>
+      <div class="pad" id="pad"></div>
+      <button class="ghost" style="margin-top:8px" onclick="stopAll()">⏹ Остановить звук</button></div>
+    <div class="card"><div class="dim" style="margin-bottom:8px">Фото и видео</div>
+      <div class="gal" id="gal"></div></div>
+    <p class="dim" style="font-size:13px">Нажмите на кнопку — звук/фото/видео появится на весь экран (на этом же устройстве; на доске откройте страницу прямо на ней). Один раз коснитесь экрана и поднимите громкость для звука.</p>
+  </div>
+
+  <!-- БИБЛИОТЕКА -->
+  <div id="lib" style="display:none">
+    <div class="card">
+      <div class="dim">GitHub-токен (хранится только на этом устройстве)</div>
+      <input id="tok" type="password" placeholder="github_pat_...">
+      <div class="row"><button class="ghost" onclick="saveTok()">Сохранить токен</button><button class="ghost" onclick="forgetTok()">Забыть</button></div>
+      <div class="st dim" id="tokst"></div>
+    </div>
+    <div class="card">
+      <div class="dim" style="margin-bottom:6px">Добавить звук</div>
+      <input id="sName" placeholder="название кнопки">
+      <input id="sUrl" placeholder="ссылка на .mp3 (Myinstants) — или оставьте пустым и выберите файл">
+      <label class="file"><span class="ghost" style="display:block;text-align:center" id="sFileLbl">🎵 выбрать аудиофайл</span>
+        <input id="sFile" type="file" accept="audio/*" onchange="pickLbl(this,'sFileLbl','🎵 ')"></label>
+      <button class="big" onclick="addSound()">Загрузить звук на GitHub</button>
+    </div>
+    <div class="card">
+      <div class="dim" style="margin-bottom:6px">Добавить фото/видео</div>
+      <input id="mName" placeholder="название">
+      <label class="file"><span class="ghost" style="display:block;text-align:center" id="mFileLbl">🖼 выбрать фото/видео</span>
+        <input id="mFile" type="file" accept="image/*,video/*" onchange="pickLbl(this,'mFileLbl','🖼 ')"></label>
+      <button class="big" onclick="addMedia()">Загрузить на GitHub</button>
+    </div>
+    <div id="prog"><i></i></div>
+    <div class="st" id="libst"></div>
+    <p class="dim" style="font-size:12px">После загрузки сайт обновляется не сразу — GitHub Pages пересобирается ~30–120 с. Потом нажмите «Обновить» на вкладке «Показ». Крупное видео загружать не стоит (ограничение GitHub и размер репозитория).</p>
+  </div>
+</div>
+
+<div id="full"><button class="close" onclick="closeFull()">✕</button><div id="fstage"></div></div>
+
+<script>
+var OWNER='mikhailkulinskii1910-jpg', REPO='vsluh', API='https://api.github.com/repos/'+OWNER+'/'+REPO+'/contents/', DIR='irbis/pad';
+var lib={sounds:[],media:[]}, audios=[], curUrl=null;
+function $(id){return document.getElementById(id)}
+function tab(t){ $('show').style.display=t==='show'?'':'none'; $('lib').style.display=t==='lib'?'':'none';
+  $('tShow').className='tab'+(t==='show'?' on':''); $('tLib').className='tab'+(t==='lib'?' on':''); if(t==='lib') $('tokst').textContent=token()?'токен сохранён':'токен не задан'; }
+
+/* ---------- ПОКАЗ ---------- */
+async function refresh(){ try{ var r=await fetch('lib.json?t='+Date.now(),{cache:'no-store'}); lib=await r.json(); }catch(e){ lib={sounds:[],media:[]}; } render(); }
+function render(){
+  var pad=$('pad'); pad.innerHTML='';
+  (lib.sounds||[]).forEach(function(s){ var b=document.createElement('button'); b.className='snd'; b.textContent=s.n; b.onclick=function(){ playSound(s.u||('files/'+s.f)); }; pad.appendChild(b); });
+  if(!(lib.sounds||[]).length){ var d=document.createElement('div'); d.className='dim'; d.style.cssText='grid-column:1/-1;font-size:13px'; d.textContent='Пусто. Добавьте звуки во вкладке «Библиотека».'; pad.appendChild(d); }
+  var gal=$('gal'); gal.innerHTML='';
+  (lib.media||[]).forEach(function(m){ var it=document.createElement('div'); it.className='item';
+    var th= m.kind==='video' ? document.createElement('video') : document.createElement('img'); th.src='files/'+m.p; if(m.kind==='video'){th.muted=true;}
+    var cap=document.createElement('div'); cap.className='cap'; cap.textContent=m.n;
+    it.appendChild(th); it.appendChild(cap); it.onclick=function(){ showMedia('files/'+m.p, m.kind); }; gal.appendChild(it); });
+  if(!(lib.media||[]).length){ var d2=document.createElement('div'); d2.className='dim'; d2.style.cssText='grid-column:1/-1;font-size:13px'; d2.textContent='Пусто. Добавьте фото/видео во вкладке «Библиотека».'; gal.appendChild(d2); }
+}
+function playSound(u){ try{ var a=new Audio(u); a.play().catch(function(){window.open(u,'_blank')}); audios.push(a); }catch(e){} }
+function stopAll(){ audios.forEach(function(a){try{a.pause()}catch(e){}}); audios=[]; }
+function showMedia(src,kind){ var st=$('fstage'); st.innerHTML=''; if(curUrl){URL.revokeObjectURL(curUrl);curUrl=null;}
+  var el= kind==='video' ? document.createElement('video') : document.createElement('img'); el.src=src;
+  if(kind==='video'){ el.autoplay=true; el.loop=true; el.playsInline=true; el.setAttribute('playsinline',''); el.play&&el.play().catch(function(){}); }
+  st.appendChild(el); $('full').style.display='flex'; try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}catch(e){} }
+function closeFull(){ $('full').style.display='none'; $('fstage').innerHTML=''; if(curUrl){URL.revokeObjectURL(curUrl);curUrl=null;} }
+function localShow(input){ var f=input.files&&input.files[0]; input.value=''; if(!f)return; curUrl=URL.createObjectURL(f); showMedia(curUrl, f.type.indexOf('video')===0?'video':'image'); }
+
+/* ---------- БИБЛИОТЕКА (GitHub) ---------- */
+function token(){ try{return localStorage.getItem('krisa37.ghtok')||''}catch(e){return ''} }
+function saveTok(){ try{localStorage.setItem('krisa37.ghtok',$('tok').value.trim())}catch(e){} $('tokst').textContent='токен сохранён'; }
+function forgetTok(){ try{localStorage.removeItem('krisa37.ghtok')}catch(e){} $('tok').value=''; $('tokst').textContent='токен удалён'; }
+function pickLbl(input,lbl,pre){ var f=input.files&&input.files[0]; $(lbl).textContent= f? (pre+(f.name||'файл')) : (pre+'выбрать'); }
+function H(){ return {Authorization:'Bearer '+token(), Accept:'application/vnd.github+json','Content-Type':'application/json'}; }
+function b64(buf){ var bin='',b=new Uint8Array(buf),ch=0x8000; for(var i=0;i<b.length;i+=ch){ bin+=String.fromCharCode.apply(null,b.subarray(i,i+ch)); } return btoa(bin); }
+function safe(n){ return (n||'file').replace(/[^\w.-]+/g,'_'); }
+async function ghGet(path){ try{ var r=await fetch(API+path+'?ref=main&t='+Date.now(),{headers:H(),cache:'no-store'}); if(r.status===200) return await r.json(); }catch(e){} return null; }
+async function ghPut(path, contentB64, msg){ var ex=await ghGet(path); var body={message:msg,content:contentB64,branch:'main'}; if(ex&&ex.sha) body.sha=ex.sha;
+  var r=await fetch(API+path,{method:'PUT',headers:H(),body:JSON.stringify(body)}); if(!r.ok) throw new Error('GitHub '+r.status+' '+(await r.text()).slice(0,120)); return r; }
+function utf8b64(s){ return btoa(unescape(encodeURIComponent(s))); }
+async function updateLib(mut){ var cur=await ghGet(DIR+'/lib.json'); var data={sounds:[],media:[]};
+  if(cur&&cur.content){ try{ data=JSON.parse(decodeURIComponent(escape(atob(cur.content.replace(/\n/g,''))))); }catch(e){} }
+  mut(data); await ghPut(DIR+'/lib.json', utf8b64(JSON.stringify(data)), 'show library update'); }
+function setLibSt(t,err){ $('libst').textContent=t; $('libst').className='st'+(err?' warn':''); }
+async function addSound(){
+  if(!token()) return setLibSt('Сначала сохраните GitHub-токен',1);
+  var name=$('sName').value.trim(); if(!name) return setLibSt('Введите название',1);
+  var url=$('sUrl').value.trim(), f=$('sFile').files&&$('sFile').files[0];
+  try{
+    if(url){ await updateLib(function(d){ d.sounds.push({n:name.slice(0,24),u:url}); }); }
+    else if(f){ setLibSt('Загрузка…'); progress(f,0); var fn='s_'+Date.now()+'_'+safe(f.name);
+      await ghPut(DIR+'/files/'+fn, b64(await f.arrayBuffer()), 'add sound '+fn);
+      await updateLib(function(d){ d.sounds.push({n:name.slice(0,24),f:fn}); }); }
+    else return setLibSt('Укажите ссылку или выберите файл',1);
+    $('sName').value='';$('sUrl').value='';$('sFile').value='';$('sFileLbl').textContent='🎵 выбрать аудиофайл';
+    setLibSt('Готово. Через ~1 мин нажмите «Обновить» на вкладке «Показ».'); hideProg();
+  }catch(e){ setLibSt('Ошибка: '+e.message,1); hideProg(); }
+}
+async function addMedia(){
+  if(!token()) return setLibSt('Сначала сохраните GitHub-токен',1);
+  var name=$('mName').value.trim(), f=$('mFile').files&&$('mFile').files[0];
+  if(!name) return setLibSt('Введите название',1); if(!f) return setLibSt('Выберите файл',1);
+  var kind=f.type.indexOf('video')===0?'video':'image';
+  try{ setLibSt('Загрузка…'); progress(f,0); var fn='m_'+Date.now()+'_'+safe(f.name);
+    await ghPut(DIR+'/files/'+fn, b64(await f.arrayBuffer()), 'add media '+fn);
+    await updateLib(function(d){ d.media.push({n:name.slice(0,24),p:fn,kind:kind}); });
+    $('mName').value='';$('mFile').value='';$('mFileLbl').textContent='🖼 выбрать фото/видео';
+    setLibSt('Готово. Через ~1 мин нажмите «Обновить» на вкладке «Показ».'); hideProg();
+  }catch(e){ setLibSt('Ошибка: '+e.message,1); hideProg(); }
+}
+function progress(f,p){ var el=$('prog'); el.style.display='block'; el.firstElementChild.style.width=(p||5)+'%'; }
+function hideProg(){ setTimeout(function(){ $('prog').style.display='none'; $('prog').firstElementChild.style.width='0'; },600); }
+
+/* старт */
+try{ $('tok').value=token(); }catch(e){}
+refresh();
+</script></body></html>
