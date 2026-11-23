@@ -3155,7 +3155,7 @@ class MainActivity : Activity() {
         private const val REQ_BT = 38
         private const val FLASH_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/"
         private const val SHOW_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/"
-        private const val SHORT_URL = "https://is.gd/krisa37"
+        private const val SHORT_URL = "https://clck.ru/3XBmBy"   // российский сокращатель (Яндекс) — работает без VPN
         private const val PREF_PROJ = "proj_brand"
         private const val ACTION_PERMISSION = "ru.irbis.remote.USB_PERMISSION"
         private const val ACTION_FLASH_PERM = "ru.irbis.remote.USB_FLASH_PERMISSION"
