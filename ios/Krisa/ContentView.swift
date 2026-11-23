@@ -748,6 +748,9 @@ struct PadWeb: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if let u = action.request.url, u.lastPathComponent.hasPrefix("krisa37-show.") {
+                PadWeb.saveFile(u); decisionHandler(.cancel); return            // файл-ссылка — сохранить
+            }
             if let u = action.request.url, ["http", "https"].contains(u.scheme ?? ""), u.host != "mikhailkulinskii1910-jpg.github.io" {
                 UIApplication.shared.open(u); decisionHandler(.cancel); return
             }
@@ -758,6 +761,21 @@ struct PadWeb: UIViewRepresentable {
             if let u = action.request.url { UIApplication.shared.open(u) }
             return nil
         }
+    }
+    /// Скачать файл и показать «Поделиться» — оттуда «Сохранить в Файлы» или отправить.
+    static func saveFile(_ u: URL) {
+        URLSession.shared.dataTask(with: u) { data, _, _ in
+            guard let data = data else { return }
+            let f = FileManager.default.temporaryDirectory.appendingPathComponent(u.lastPathComponent)
+            try? data.write(to: f)
+            DispatchQueue.main.async {
+                guard let root = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first?.rootViewController else { return }
+                var top = root; while let p = top.presentedViewController { top = p }
+                let vc = UIActivityViewController(activityItems: [f], applicationActivities: nil)
+                vc.popoverPresentationController?.sourceView = top.view
+                top.present(vc, animated: true)
+            }
+        }.resume()
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeUIView(context: Context) -> WKWebView {

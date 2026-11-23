@@ -1852,12 +1852,25 @@ class MainActivity : Activity() {
         webViewClient = object : android.webkit.WebViewClient() {
             override fun shouldOverrideUrlLoading(v: android.webkit.WebView, r: android.webkit.WebResourceRequest): Boolean {
                 val u = r.url
+                if (u.lastPathSegment?.startsWith("krisa37-show.") == true) { downloadFile(u); return true }   // файл-ссылка — скачать
                 if ((u.scheme == "http" || u.scheme == "https") && u.host == "mikhailkulinskii1910-jpg.github.io") return false
                 if (u.scheme == "http" || u.scheme == "https") { openExternal(u); return true }
                 return false
             }
         }
-        setDownloadListener { url, _, _, _, _ -> openExternal(android.net.Uri.parse(url)) }
+        setDownloadListener { url, _, _, _, _ -> downloadFile(android.net.Uri.parse(url)) }
+    }
+
+    /** Скачать файл в «Загрузки» через системный менеджер загрузок; не вышло — открыть в браузере. */
+    private fun downloadFile(u: android.net.Uri) {
+        try {
+            val name = u.lastPathSegment ?: "krisa37-file"
+            val dm = getSystemService(DOWNLOAD_SERVICE) as android.app.DownloadManager
+            dm.enqueue(android.app.DownloadManager.Request(u).setTitle(name)
+                .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, name))
+            say("> скачивается в «Загрузки»: $name", ok = true)
+        } catch (e: Exception) { openExternal(u) }
     }
 
     private fun buildShowPanel(): View {
