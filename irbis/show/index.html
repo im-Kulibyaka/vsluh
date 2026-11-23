@@ -65,6 +65,18 @@
   <button class="big" onclick="goScreen()">▣ Экран (показывать здесь)</button>
   <button class="big" onclick="goRemote()">✶ Пульт (управлять)</button>
   <p class="dim" style="font-size:13px">Лучше, чтобы оба устройства были в одной сети Wi-Fi. Связь — напрямую между устройствами (P2P), сервер картинки/звук не хранит.</p>
+  <div class="card" id="share" style="text-align:left;margin-top:18px">
+    <div class="dim" style="font-size:13px">Ссылка на «Шоу» — откройте её на доске/ТВ или отправьте:</div>
+    <div class="row" style="align-items:center;margin-top:8px">
+      <input id="lnkShort" class="mono" readonly value="https://clck.ru/3XBmBy" onclick="this.select()" style="font-size:17px;min-width:0">
+      <button class="ghost" style="flex:0 0 auto;width:56px;padding:12px 0;font-size:20px" title="Копировать" onclick="copyLnk('lnkShort',this)">⧉</button>
+    </div>
+    <div class="row" style="align-items:center;margin-top:8px">
+      <input id="lnkFull" class="mono" readonly value="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/" onclick="this.select()" style="font-size:12px;min-width:0">
+      <button class="ghost" style="flex:0 0 auto;width:56px;padding:12px 0;font-size:20px" title="Копировать" onclick="copyLnk('lnkFull',this)">⧉</button>
+    </div>
+    <div class="dim" style="font-size:12px;margin-top:6px" id="shareSt">Нажмите ⧉ — ссылка скопируется. Короткая открывается без VPN; если нет — используйте полную.</div>
+  </div>
 </div>
 
 <!-- ЭКРАН -->
@@ -125,6 +137,13 @@ function unlockAudio(){ try{ const a=new Audio(); a.muted=true;
 
 function randCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++) s+=c[Math.random()*c.length|0]; return s; }
 function peerId(code){ return 'krisa37show'+code; }
+
+/* копирование ссылки: Clipboard API, а если нельзя (встроенный браузер) — выделение + execCommand */
+function copyLnk(id,btn){
+  var el=$('#'+id), v=el.value, ok=function(){ var o=btn.textContent; btn.textContent='✓'; var st=$('#shareSt'); if(st) st.textContent='Скопировано: '+v; setTimeout(function(){btn.textContent=o;},1500); };
+  var fb=function(){ el.focus(); el.select(); el.setSelectionRange(0,v.length); try{ document.execCommand('copy'); ok(); }catch(e){ var st=$('#shareSt'); if(st) st.textContent='Ссылка выделена — скопируйте вручную'; } };
+  if(navigator.clipboard&&window.isSecureContext){ navigator.clipboard.writeText(v).then(ok,fb); } else fb();
+}
 
 /* ===================== ЭКРАН ===================== */
 function goScreen(){
