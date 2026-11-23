@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>krisa37™ Sound pad</title>
+<meta name="description" content="Sound pad: чёрный экран на доске/ТВ играет звуки, которые вы нажимаете на телефоне.">
+<link rel="icon" href="../favicon.png">
+<script src="../apptheme.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.10.1/mqtt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+@font-face{font-family:VT323;src:url(../vt323.ttf)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#050806;color:#7dff9a;font:16px/1.5 system-ui,-apple-system,Roboto,sans-serif;overscroll-behavior:none}
+.wrap{max-width:720px;margin:0 auto;padding:22px 16px 60px}
+h1{font-family:VT323,monospace;font-size:40px;line-height:1;margin:0 0 4px}
+.dim{color:#4c8a5b} a{color:#7dff9a}
+button{font:inherit;cursor:pointer}
+.big{display:block;width:100%;font-size:20px;background:#7dff9a;color:#04140a;border:0;border-radius:10px;padding:18px;margin:10px 0}
+.ghost{background:transparent;color:#7dff9a;border:1px solid #1f3b27;border-radius:10px;padding:14px}
+.card{background:#0b120d;border:1px solid #1f3b27;border-radius:12px;padding:14px;margin:12px 0}
+input{font:inherit;width:100%;background:#050806;color:#7dff9a;border:1px solid #1f3b27;border-radius:8px;padding:12px}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.snd{background:#0b120d;border:1px solid #1f3b27;color:#7dff9a;border-radius:10px;padding:16px 8px;min-height:66px;font-size:15px;word-break:break-word}
+.snd:active{background:#7dff9a;color:#04140a}
+.st{font-family:ui-monospace,monospace;font-size:12px}
+.ch{display:inline-block;margin-right:10px}.ch i{display:inline-block;width:8px;height:8px;border-radius:50%;background:#e05050;margin-right:4px}.ch i.on{background:#22c55e}
+#screen{position:fixed;inset:0;background:#000;display:none;color:#7dff9a}
+#sinfo{position:absolute;left:0;right:0;top:0;padding:18px;text-align:center;transition:opacity .4s}
+#sinfo.hide{opacity:0;pointer-events:none}
+#code{font-family:VT323,monospace;font-size:72px;line-height:1;letter-spacing:10px;margin:6px 0}
+#qr{display:inline-block;background:#fff;padding:8px;border-radius:8px;margin-top:6px}
+#now{position:absolute;left:0;right:0;bottom:22px;text-align:center;font-size:15px;opacity:.55}
+</style></head><body>
+
+<div class="wrap" id="home">
+  <h1>Sound pad</h1>
+  <p class="dim">Чёрный экран на доске/ТВ играет звуки, которые вы жмёте на телефоне. Звуки — из библиотеки саундпада. Команды идут сразу по нескольким каналам, поэтому обычно работает и без VPN.</p>
+  <button class="big" onclick="goScreen()">▣ Экран (чёрный, играет звуки)</button>
+  <button class="big" onclick="goRemote()">♫ Пульт (саундпад на телефоне)</button>
+  <p class="dim" style="font-size:13px"><a href="../show/" onclick="this.href='../show/'+location.search">← другие режимы «Шоу»</a></p>
+</div>
+
+<div id="screen">
+  <div id="sinfo">
+    <div class="dim">код — введите на телефоне в «Пульте»</div>
+    <div id="code">·····</div>
+    <div id="qr"></div>
+    <div class="st" id="sst" style="margin-top:8px"></div>
+    <div class="dim" style="font-size:13px;margin-top:6px">нажмите на экран один раз — чтобы браузер разрешил звук и развернул на весь экран</div>
+  </div>
+  <div id="now"></div>
+</div>
+
+<div class="wrap" id="remote" style="display:none">
+  <h1>Пульт</h1>
+  <div class="card" id="connCard">
+    <div class="dim">Код с большого экрана:</div>
+    <input id="codeIn" maxlength="5" autocapitalize="characters" placeholder="ABCDE" style="text-transform:uppercase;font-size:28px;letter-spacing:6px;text-align:center;margin:10px 0">
+    <button class="big" onclick="startRemote()">Подключиться</button>
+  </div>
+  <div id="ctrls" style="display:none">
+    <div class="st" id="rst"></div>
+    <div class="card"><div class="pad" id="pad"></div>
+      <button class="ghost" style="margin-top:10px;width:100%" onclick="send({t:'s'})">⏹ Остановить звук</button></div>
+    <p class="dim" style="font-size:12px">Звуки добавляются в «Саундпад и показ» → «Библиотека». <a href="#" onclick="loadLib();return false">⟳ обновить список</a></p>
+  </div>
+</div>
+
+<script>
+var $=function(id){return document.getElementById(id)};
+var CODE='', role='', seen={}, sounds=[], audios=[];
+var CH={ntfy:0,emqx:0,hive:0};
+function topic(){ return 'krisa37sp-'+CODE; }
+function chStatus(){ var h=Object.keys(CH).map(function(k){return '<span class="ch"><i class="'+(CH[k]?'on':'')+'"></i>'+k+'</span>'}).join('');
+  var any=Object.keys(CH).some(function(k){return CH[k]}); h+= any?'— связь есть':'— подключение…';
+  var el=$(role==='screen'?'sst':'rst'); if(el) el.innerHTML=h; }
+function setCh(k,v){ CH[k]=v?1:0; chStatus(); }
+
+/* ---- каналы: ntfy.sh (HTTP+WebSocket) и два публичных MQTT ---- */
+var mq={};
+function startChannels(onMsg){
+  // ntfy.sh
+  (function c(){ try{ var ws=new WebSocket('wss://ntfy.sh/'+topic()+'/ws');
+    ws.onopen=function(){setCh('ntfy',1)}; ws.onclose=function(){setCh('ntfy',0); setTimeout(c,3000)};
+    ws.onmessage=function(e){ try{ var d=JSON.parse(e.data); if(d.event==='message') onMsg(d.message); }catch(_){} };
+  }catch(e){ setTimeout(c,5000); } })();
+  // MQTT
+  if(window.mqtt){
+    [['emqx','wss://broker.emqx.io:8084/mqtt'],['hive','wss://broker.hivemq.com:8884/mqtt']].forEach(function(b){
+      try{ var cl=mqtt.connect(b[1],{clientId:'k37'+Math.random().toString(16).slice(2,10),reconnectPeriod:3000,connectTimeout:8000,clean:true});
+        mq[b[0]]=cl;
+        cl.on('connect',function(){ setCh(b[0],1); cl.subscribe(topic()); });
+        cl.on('close',function(){ setCh(b[0],0); }); cl.on('offline',function(){ setCh(b[0],0); });
+        cl.on('message',function(t,p){ onMsg(p.toString()); });
+      }catch(e){}
+    });
+  }
+}
+function send(o){
+  o.i=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  var m=JSON.stringify(o);
+  fetch('https://ntfy.sh/'+topic(),{method:'POST',body:m}).then(function(r){ if(r.ok) setCh('ntfy',1); }).catch(function(){});
+  Object.keys(mq).forEach(function(k){ try{ if(mq[k].connected) mq[k].publish(topic(),m); }catch(e){} });
+}
+function handle(m){
+  var d; try{ d=JSON.parse(m); }catch(_){ return; }
+  if(!d||!d.i||seen[d.i]) return; seen[d.i]=1;            // одна команда приходит по нескольким каналам — играем один раз
+  if(role!=='screen') return;
+  if(d.t==='p'&&d.u){ try{ var a=new Audio(d.u); a.play().catch(function(){}); audios.push(a); }catch(e){}
+    $('now').textContent='♫ '+(d.n||''); clearTimeout(handle.t); handle.t=setTimeout(function(){$('now').textContent=''},2500); }
+  else if(d.t==='s'){ audios.forEach(function(a){try{a.pause()}catch(e){}}); audios=[]; $('now').textContent=''; }
+}
+
+/* ---- ЭКРАН ---- */
+function rnd(){ var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',s=''; for(var i=0;i<5;i++) s+=c[Math.random()*c.length|0]; return s; }
+function goScreen(){
+  role='screen'; CODE=rnd(); $('home').style.display='none'; $('screen').style.display='block';
+  $('code').textContent=CODE;
+  var url=location.origin+location.pathname+'#r='+CODE;
+  try{ new QRCode($('qr'),{text:url,width:132,height:132,colorDark:'#04140a',colorLight:'#ffffff'}); }catch(e){}
+  chStatus(); startChannels(handle);
+  var info=$('sinfo'), t;
+  $('screen').addEventListener('click',function(){
+    try{ var a=new Audio(); a.muted=true; a.play().catch(function(){}); }catch(e){}   // разрешение звука
+    try{ document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen(); }catch(e){}
+    info.classList.remove('hide'); clearTimeout(t); t=setTimeout(function(){info.classList.add('hide')},5000);
+  });
+}
+
+/* ---- ПУЛЬТ ---- */
+function goRemote(pref){ role='remote'; $('home').style.display='none'; $('remote').style.display='block'; if(pref) $('codeIn').value=pref; }
+function startRemote(){
+  var c=($('codeIn').value||'').trim().toUpperCase(); if(c.length<4) return alert('Введите код с экрана');
+  CODE=c; $('connCard').style.display='none'; $('ctrls').style.display='block';
+  chStatus(); startChannels(handle); loadLib();
+}
+function loadLib(){
+  fetch('../pad/lib.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.json()}).then(function(l){ sounds=l.sounds||[]; render(); })
+    .catch(function(){ sounds=[]; render(); });
+}
+function render(){
+  var p=$('pad'); p.innerHTML='';
+  sounds.forEach(function(s){ var b=document.createElement('button'); b.className='snd'; b.textContent=s.n;
+    var u=s.u || new URL('../pad/files/'+s.f, location.href).href;
+    b.onclick=function(){ send({t:'p',u:u,n:s.n}); try{navigator.vibrate&&navigator.vibrate(15)}catch(e){} };
+    p.appendChild(b); });
+  if(!sounds.length){ var d=document.createElement('div'); d.className='dim'; d.style.cssText='grid-column:1/-1;font-size:13px';
+    d.textContent='Пусто. Добавьте звуки в «Саундпад и показ» → «Библиотека».'; p.appendChild(d); }
+}
+
+(function(){ var m=(location.hash||'').match(/r=([A-Za-z0-9]{4,5})/); if(m){ goRemote(m[1].toUpperCase()); startRemote(); } })();
+</script></body></html>
