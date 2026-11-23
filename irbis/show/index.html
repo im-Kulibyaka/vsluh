@@ -73,6 +73,7 @@
     <div class="dim">код комнаты — введите его на телефоне-пульте</div>
     <div id="code" class="mono">····</div>
     <div id="qr"></div>
+    <div class="dim">наведите камеру на QR или откройте <b>is.gd/krisa37</b> и введите код</div>
     <div class="status dim" id="scrStatus">запуск…</div>
   </div>
   <div id="tapHint">нажмите, чтобы развернуть на весь экран</div>
@@ -146,7 +147,8 @@ function startScreen(code){
   peer.on('open',()=>{
     $('#code').textContent=code;
     $('#scrStatus').textContent='готов — ждём пульт';
-    const url=location.origin+location.pathname+'#remote='+code;
+    // короткая ссылка + код комнаты в якоре: якорь переживает редирект is.gd и пульт подключается сам
+    const url='https://is.gd/krisa37#remote='+code;
     $('#qr').innerHTML=''; new QRCode($('#qr'),{text:url,width:128,height:128,colorDark:'#04140a',colorLight:'#ffffff'});
   });
   peer.on('connection',c=>{ conns.push(c); setupScreenConn(c);
