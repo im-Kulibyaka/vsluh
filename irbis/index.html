@@ -826,7 +826,7 @@ html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%
       <div class="id">#500202 :: IRBIS :: NEC 38kHz</div>
       <div class="mode" id="modeLine"></div>
     </div>
-    <div class="hbtns"><a class="gear help" href="guide/" aria-label="Как пользоваться">[?]</a><button class="gear" id="gear" aria-label="Настройки">[tx]</button></div>
+    <div class="hbtns"><a class="gear" href="show/" aria-label="Шоу-экран">[▣]</a><a class="gear help" href="guide/" aria-label="Как пользоваться">[?]</a><button class="gear" id="gear" aria-label="Настройки">[tx]</button></div>
   </header>
   <nav class="tabs" id="tabs" aria-label="Пульт"><div class="trow"><button class="gear tab ru" data-r="boards">Доски</button><button class="gear tab ru" data-r="proj">Проекторы</button><button class="gear tab ru" data-r="ac">Кондиционеры</button></div><div class="trow"><button class="gear tab ru" data-r="scripts">Сценарии</button><button class="gear tab ru" data-r="touch">Тачпад</button><button class="gear tab ru" data-r="lib">Библиотека</button><button class="gear tab ctab ru" data-r="color">Цвет</button></div></nav>
   <div id="boards"><div class="brands" id="boardChips" aria-label="Доска"></div></div>
@@ -3854,7 +3854,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.42', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.43', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);

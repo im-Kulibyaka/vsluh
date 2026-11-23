@@ -136,6 +136,11 @@ struct ContentView: View {
                     .lineLimit(1).minimumScaleFactor(0.7).padding(.top, 4)
             }
             Spacer()
+            Button {
+                if let u = URL(string: "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/") { UIApplication.shared.open(u) }
+            } label: { headerLabel(Term.prism ? "▣" : "[▣]", width: 52) }
+            .padding(.top, 10)
+            .accessibilityLabel("Шоу-экран")
             Button { help = true } label: { headerLabel(Term.prism ? "?" : "[?]", width: 52) }
             .padding(.top, 10)
             .accessibilityLabel("Как пользоваться")

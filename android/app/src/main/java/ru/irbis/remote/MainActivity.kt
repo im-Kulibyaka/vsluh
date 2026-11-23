@@ -321,6 +321,17 @@ class MainActivity : Activity() {
             contentDescription = "Как пользоваться"
             setOnClickListener { glitch(it); showHelp() }
         }
+        val show = TextView(this).apply {
+            text = "[▣]"
+            typeface = Term.mono
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            setTextColor(Term.FG)
+            gravity = Gravity.CENTER
+            background = Term.boxBg(this@MainActivity)
+            contentDescription = "Шоу-экран"
+            setOnClickListener { glitch(it); openExternal(android.net.Uri.parse(SHOW_URL)) }
+        }
+        header.addView(show, LinearLayout.LayoutParams(dp(52), dp(44)).apply { topMargin = dp(10); rightMargin = dp(8) })
         header.addView(help, LinearLayout.LayoutParams(dp(52), dp(44)).apply { topMargin = dp(10); rightMargin = dp(8) })
         header.addView(gear, LinearLayout.LayoutParams(dp(64), dp(44)).apply { topMargin = dp(10) })
         root.addView(header)
@@ -3138,6 +3149,7 @@ class MainActivity : Activity() {
         private const val TAB_LIB = "lib"
         private const val REQ_BT = 38
         private const val FLASH_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/"
+        private const val SHOW_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/"
         private const val PREF_PROJ = "proj_brand"
         private const val ACTION_PERMISSION = "ru.irbis.remote.USB_PERMISSION"
         private const val ACTION_FLASH_PERM = "ru.irbis.remote.USB_FLASH_PERMISSION"
