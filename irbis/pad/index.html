@@ -62,6 +62,13 @@ label.file input{display:none}
 
   <!-- БИБЛИОТЕКА -->
   <div id="lib" style="display:none">
+    <div class="card" id="libGate">
+      <div class="dim">Добавлять файлы может только администратор. Введите ключ:</div>
+      <input id="adminKey" type="password" placeholder="ключ администратора" onkeydown="if(event.key==='Enter')adminLogin()">
+      <button class="big" onclick="adminLogin()">Войти</button>
+      <div class="st" id="gatest"></div>
+    </div>
+    <div id="libInner" style="display:none">
     <div class="card">
       <div class="dim">GitHub-токен (хранится только на этом устройстве)</div>
       <input id="tok" type="password" placeholder="github_pat_...">
@@ -86,6 +93,8 @@ label.file input{display:none}
     <div id="prog"><i></i></div>
     <div class="st" id="libst"></div>
     <p class="dim" style="font-size:12px">После загрузки сайт обновляется не сразу — GitHub Pages пересобирается ~30–120 с. Потом нажмите «Обновить» на вкладке «Показ». Крупное видео загружать не стоит (ограничение GitHub и размер репозитория).</p>
+    <button class="ghost" style="margin-top:4px" onclick="adminLogout()">🔒 выйти из режима администратора</button>
+    </div><!-- libInner -->
   </div>
 </div>
 
@@ -95,8 +104,14 @@ label.file input{display:none}
 var OWNER='mikhailkulinskii1910-jpg', REPO='vsluh', API='https://api.github.com/repos/'+OWNER+'/'+REPO+'/contents/', DIR='irbis/pad';
 var lib={sounds:[],media:[]}, audios=[], curUrl=null;
 function $(id){return document.getElementById(id)}
+var ADMIN_HASH='2acf2854000db3d734ccd4e8e14b99d3fa795e82030231d4f00e7ba6219e48dc';
 function tab(t){ $('show').style.display=t==='show'?'':'none'; $('lib').style.display=t==='lib'?'':'none';
-  $('tShow').className='tab'+(t==='show'?' on':''); $('tLib').className='tab'+(t==='lib'?' on':''); if(t==='lib') $('tokst').textContent=token()?'токен сохранён':'токен не задан'; }
+  $('tShow').className='tab'+(t==='show'?' on':''); $('tLib').className='tab'+(t==='lib'?' on':''); if(t==='lib') unlockLib(isAdmin()); }
+function isAdmin(){ try{return localStorage.getItem('krisa37.admin')==='1'}catch(e){return false} }
+function unlockLib(on){ $('libGate').style.display=on?'none':''; $('libInner').style.display=on?'':'none'; if(on){ $('tokst').textContent=token()?'токен сохранён':'токен не задан'; } }
+function adminLogout(){ try{localStorage.removeItem('krisa37.admin')}catch(e){} unlockLib(false); }
+async function sha256hex(s){ var b=new TextEncoder().encode(s); var h=await crypto.subtle.digest('SHA-256',b); return Array.from(new Uint8Array(h)).map(function(x){return x.toString(16).padStart(2,'0')}).join(''); }
+async function adminLogin(){ try{ var h=await sha256hex($('adminKey').value); if(h===ADMIN_HASH){ try{localStorage.setItem('krisa37.admin','1')}catch(e){} $('adminKey').value=''; $('gatest').textContent=''; unlockLib(true); } else { $('gatest').textContent='Неверный ключ'; $('gatest').className='st warn'; } }catch(e){ $('gatest').textContent='Ошибка: '+e.message; $('gatest').className='st warn'; } }
 
 /* ---------- ПОКАЗ ---------- */
 async function refresh(){ try{ var r=await fetch('lib.json?t='+Date.now(),{cache:'no-store'}); lib=await r.json(); }catch(e){ lib={sounds:[],media:[]}; } render(); }
