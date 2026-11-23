@@ -735,6 +735,37 @@ struct HelpWeb: UIViewRepresentable {
     func updateUIView(_ web: WKWebView, context: Context) {}
 }
 
+/// Веб-экран со страницей по URL (например, «Саундпад и показ» /pad/). Наш сайт — внутри, прочие ссылки — в Safari.
+struct PadWeb: UIViewRepresentable {
+    let url: String
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if let u = action.request.url, ["http", "https"].contains(u.scheme ?? ""), u.host != "mikhailkulinskii1910-jpg.github.io" {
+                UIApplication.shared.open(u); decisionHandler(.cancel); return
+            }
+            decisionHandler(.allow)
+        }
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                     for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if let u = action.request.url { UIApplication.shared.open(u) }
+            return nil
+        }
+    }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeUIView(context: Context) -> WKWebView {
+        let web = WKWebView()
+        web.navigationDelegate = context.coordinator
+        web.uiDelegate = context.coordinator
+        web.isOpaque = false
+        web.backgroundColor = .black
+        web.scrollView.backgroundColor = .black
+        if let u = URL(string: url) { web.load(URLRequest(url: u)) }
+        return web
+    }
+    func updateUIView(_ web: WKWebView, context: Context) {}
+}
+
 /// Плашка вкладки / чипа / кнопки пульта кондиционера в стиле текущей темы; on — включена (залита).
 struct TabLabel: View {
     let title: String
