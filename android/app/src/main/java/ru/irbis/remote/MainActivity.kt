@@ -332,8 +332,8 @@ class MainActivity : Activity() {
             setOnClickListener { glitch(it); openExternal(android.net.Uri.parse(SHOW_URL)) }
             setOnLongClickListener {
                 val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                cm.setPrimaryClip(android.content.ClipData.newPlainText("krisa37", SHORT_URL))
-                say("> ссылка скопирована: $SHORT_URL", ok = true); true
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("krisa37", SHOW_URL))
+                say("> ссылка на «Шоу» скопирована", ok = true); true
             }
         }
         header.addView(show, LinearLayout.LayoutParams(dp(52), dp(44)).apply { topMargin = dp(10); rightMargin = dp(8) })
@@ -3155,7 +3155,6 @@ class MainActivity : Activity() {
         private const val REQ_BT = 38
         private const val FLASH_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/"
         private const val SHOW_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/"
-        private const val SHORT_URL = "https://is.gd/krisa37"
         private const val PREF_PROJ = "proj_brand"
         private const val ACTION_PERMISSION = "ru.irbis.remote.USB_PERMISSION"
         private const val ACTION_FLASH_PERM = "ru.irbis.remote.USB_FLASH_PERMISSION"

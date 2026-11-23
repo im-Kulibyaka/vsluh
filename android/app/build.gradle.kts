@@ -11,8 +11,8 @@ android {
         applicationId = "ru.irbis.remote"
         minSdk = 26
         targetSdk = 35
-        versionCode = 47
-        versionName = "1.44"
+        versionCode = 48
+        versionName = "1.45"
     }
 
     buildTypes {

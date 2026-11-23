@@ -3854,7 +3854,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.44', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.45', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);
@@ -3866,7 +3866,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWor
 
 /* [▣] Шоу: клик — открыть; долгое нажатие / правый клик — скопировать короткую ссылку */
 (function(){ var b=document.querySelector('.hbtns a[href="show/"]'); if(!b) return;
-  var SHORT='https://is.gd/krisa37', t;
+  var SHORT=new URL('show/',location.href).href, t;
   function copy(e){ if(e&&e.preventDefault) e.preventDefault();
     try{ navigator.clipboard && navigator.clipboard.writeText(SHORT); }catch(_){}
     var o=b.textContent; b.textContent='[✓]'; setTimeout(function(){ b.textContent=o; },1200); }
