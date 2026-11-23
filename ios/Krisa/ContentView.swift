@@ -142,7 +142,7 @@ struct ContentView: View {
             .padding(.top, 10)
             .accessibilityLabel("Шоу-экран")
             .contextMenu {
-                Button { UIPasteboard.general.string = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/" } label: { Label("Копировать ссылку на «Шоу»", systemImage: "doc.on.doc") }
+                Button { UIPasteboard.general.string = "https://clck.ru/3XBmBy" } label: { Label("Копировать ссылку clck.ru/3XBmBy", systemImage: "doc.on.doc") }
             }
             Button { help = true } label: { headerLabel(Term.prism ? "?" : "[?]", width: 52) }
             .padding(.top, 10)
