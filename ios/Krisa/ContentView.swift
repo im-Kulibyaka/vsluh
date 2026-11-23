@@ -141,6 +141,9 @@ struct ContentView: View {
             } label: { headerLabel(Term.prism ? "▣" : "[▣]", width: 52) }
             .padding(.top, 10)
             .accessibilityLabel("Шоу-экран")
+            .contextMenu {
+                Button { UIPasteboard.general.string = "https://is.gd/krisa37" } label: { Label("Копировать ссылку is.gd/krisa37", systemImage: "doc.on.doc") }
+            }
             Button { help = true } label: { headerLabel(Term.prism ? "?" : "[?]", width: 52) }
             .padding(.top, 10)
             .accessibilityLabel("Как пользоваться")
