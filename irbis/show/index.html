@@ -7,7 +7,7 @@
 <meta name="description" content="Чёрный экран на весь дисплей + пульт с телефона: саундпад и показ фото/видео из галереи на большом экране.">
 <link rel="icon" href="../favicon.png">
 <script src="../apptheme.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.10.1/mqtt.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   @font-face { font-family: VT323; src: url(../vt323.ttf); }
@@ -66,8 +66,7 @@
   <button class="big" onclick="goRemote()">✶ Пульт (управлять)</button>
   <button class="big" onclick="location.href='../sp/'+location.search">🔊 Sound pad (чёрный экран + звуки с телефона)</button>
   <button class="big" onclick="location.href='../pad/'+location.search">♫ Саундпад и показ (без сервера и VPN)</button>
-  <p class="dim" style="font-size:13px">Лучше, чтобы оба устройства были в одной сети Wi-Fi. Связь — напрямую между устройствами (P2P), сервер картинки/звук не хранит.</p>
-  <p class="dim" style="font-size:13px">«Ошибка связи: network»? Нужен VPN — или <a href="test.html">проверьте связь</a> и пришлите скриншот.</p>
+  <p class="dim" style="font-size:13px">Команды идут сразу по 4 каналам (ntfy, EMQX, HiveMQ, Mosquitto) — работает без VPN, если доступен хоть один. Не подключается? <a href="test.html">Проверка связи</a>.</p>
   <div class="card" id="share" style="text-align:left;margin-top:18px">
     <div class="dim" style="font-size:13px">Ссылка на «Шоу» — откройте её на доске/ТВ или отправьте:</div>
     <div class="row" style="align-items:center;margin-top:8px">
@@ -105,15 +104,15 @@
   <h1>Пульт</h1>
   <div class="card" id="connCard">
     <div class="dim">Код комнаты с большого экрана:</div>
-    <input id="codeIn" class="mono" inputmode="latin" autocapitalize="characters" maxlength="4" placeholder="ABCD" style="text-transform:uppercase;font-size:28px;letter-spacing:6px;text-align:center;margin:10px 0">
+    <input id="codeIn" class="mono" inputmode="latin" autocapitalize="characters" maxlength="5" placeholder="ABCDE" style="text-transform:uppercase;font-size:28px;letter-spacing:6px;text-align:center;margin:10px 0">
     <button class="big" onclick="connect()">Подключиться</button>
   </div>
   <div id="ctrls" style="display:none">
-    <div class="status"><span class="dot" id="dot"></span><span id="stat">нет связи</span></div>
+    <div class="status" id="stat">подключение…</div>
 
     <div class="card">
       <div class="dim" style="margin-bottom:8px">Показать на экране из галереи:</div>
-      <label class="file"><span class="big" style="margin:0">🖼 Выбрать фото / видео</span>
+      <label class="file"><span class="big" style="margin:0">🖼 Выбрать фото / видео (до 15 МБ)</span>
         <input type="file" accept="image/*,video/*" onchange="pickFile(this)"></label>
       <div id="prog"><i></i></div>
       <div class="row" style="margin-top:8px">
@@ -130,21 +129,20 @@
       </div>
       <div class="pad" id="pad"></div>
       <button class="ghost" style="margin-top:8px" onclick="send({t:'stopsound'})">⏹ Остановить звук</button>
-      <p class="dim" style="font-size:12px">Кнопка играет звук на большом экране. Добавляя звук, вставьте <b>прямую ссылку на .mp3</b> (на Myinstants: «Download» или правый клик по кнопке → «Копировать адрес аудио»). Если Myinstants блокирует прямое воспроизведение, экран откроет ссылку.</p>
+      <p class="dim" style="font-size:12px">Кнопка играет звук на большом экране. Добавляя звук, вставьте <b>прямую ссылку на .mp3</b> (на Myinstants: «Download» или правый клик по кнопке → «Копировать адрес аудио»). Звуки из «Библиотеки» саундпада подгружаются сами.</p>
     </div>
   </div>
 </div>
 
 <script>
 const $ = s => document.querySelector(s);
-let peer=null, conns=[], conn=null;
+let CODE='', role='', seen={}, mq={}, sounds=[], incoming={};
+const CH={ntfy:0,emqx:0,hive:0,mosq:0};
+const topic=()=>'krisa37show-'+CODE;
 
-/* ----- аудио-разблокировка (чтобы экран мог играть звук без касания каждый раз) ----- */
-function unlockAudio(){ try{ const a=new Audio(); a.muted=true;
-  a.src='data:audio/mpeg;base64,//uQx'; a.play().catch(()=>{});}catch(e){} }
-
-function randCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++) s+=c[Math.random()*c.length|0]; return s; }
-function peerId(code){ return 'krisa37show'+code; }
+function unlockAudio(){ try{ const a=new Audio(); a.muted=true; a.play().catch(()=>{});}catch(e){} }
+function randCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<5;i++) s+=c[Math.random()*c.length|0]; return s; }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 
 /* копирование ссылки: Clipboard API, а если нельзя (встроенный браузер) — выделение + execCommand */
 function copyLnk(id,btn){
@@ -153,115 +151,107 @@ function copyLnk(id,btn){
   if(navigator.clipboard&&window.isSecureContext){ navigator.clipboard.writeText(v).then(ok,fb); } else fb();
 }
 
+/* ===== каналы: ntfy.sh + 3 публичных MQTT (что доступно — тем и идёт) ===== */
+function chStatus(){
+  const any=Object.values(CH).some(Boolean);
+  const h=Object.keys(CH).map(k=>'<span style="margin-right:10px"><span class="dot'+(CH[k]?' on':'')+'"></span>'+k+'</span>').join('')+(any?' — связь есть':' — подключение…');
+  const el=$(role==='screen'?'#scrStatus':'#stat'); if(el) el.innerHTML=h;
+}
+function setCh(k,v){ CH[k]=v?1:0; chStatus(); }
+function startChannels(){
+  (function c(){ try{ const ws=new WebSocket('wss://ntfy.sh/'+topic()+'/ws');
+    ws.onopen=()=>setCh('ntfy',1); ws.onclose=()=>{ setCh('ntfy',0); setTimeout(c,3000); };
+    ws.onmessage=e=>{ try{ const d=JSON.parse(e.data); if(d.event!=='message') return;
+      let m; try{ m=JSON.parse(d.message); }catch(_){ return; }
+      if(d.attachment&&d.attachment.url) m.u=d.attachment.url;
+      handle(m); }catch(_){} };
+  }catch(e){ setTimeout(c,5000); } })();
+  if(!window.mqtt) return;
+  [['emqx','wss://broker.emqx.io:8084/mqtt'],['hive','wss://broker.hivemq.com:8884/mqtt'],['mosq','wss://test.mosquitto.org:8081']].forEach(b=>{
+    try{ const cl=mqtt.connect(b[1],{clientId:'k37'+Math.random().toString(16).slice(2,10),reconnectPeriod:3000,connectTimeout:8000,clean:true});
+      mq[b[0]]=cl;
+      cl.on('connect',()=>{ setCh(b[0],1); cl.subscribe(topic()); });
+      cl.on('close',()=>setCh(b[0],0)); cl.on('offline',()=>setCh(b[0],0));
+      cl.on('message',(t,p)=>{ try{ handle(JSON.parse(p.toString())); }catch(_){} });
+    }catch(e){}
+  });
+}
+function mqttSend(m){ let n=0; Object.values(mq).forEach(c=>{ try{ if(c.connected){ c.publish(topic(),m); n++; } }catch(e){} }); return n; }
+function send(o,noNtfy){
+  o.i=o.i||uid(); const m=JSON.stringify(o);
+  if(!noNtfy) fetch('https://ntfy.sh/'+topic(),{method:'POST',body:m}).catch(()=>{});
+  mqttSend(m);
+}
+
 /* ===================== ЭКРАН ===================== */
 function goScreen(){
+  role='screen'; CODE=randCode();
   $('#home').style.display='none'; $('#screen').style.display='block';
-  unlockAudio();
-  document.documentElement.requestFullscreen?.().catch(()=>{});
-  startScreen(randCode());
-  // прятать подсказку/код через 6 c, по касанию — показать снова и развернуть
-  const info=$('#scrInfo');
-  const hide=()=>info.classList.add('hide');
-  let t=setTimeout(hide,6000);
+  unlockAudio(); document.documentElement.requestFullscreen?.().catch(()=>{});
+  $('#code').textContent=CODE;
+  const url=location.origin+location.pathname+'#remote='+CODE;
+  try{ new QRCode($('#qr'),{text:url,width:128,height:128,colorDark:'#04140a',colorLight:'#ffffff'}); }catch(e){}
+  chStatus(); startChannels();
+  const info=$('#scrInfo'), hide=()=>info.classList.add('hide');
+  let t=setTimeout(hide,8000);
   $('#screen').addEventListener('click',()=>{
-    document.documentElement.requestFullscreen?.().catch(()=>{});
+    unlockAudio(); document.documentElement.requestFullscreen?.().catch(()=>{});
     info.classList.remove('hide'); clearTimeout(t); t=setTimeout(hide,6000);
     $('#tapHint').style.display='none';
   });
 }
-function startScreen(code){
-  if(peer) try{peer.destroy()}catch(e){}
-  peer=new Peer(peerId(code),{debug:1});
-  peer.on('open',()=>{
-    $('#code').textContent=code;
-    $('#scrStatus').textContent='готов — ждём пульт';
-    // прямая ссылка (без сокращателя — он может быть недоступен без VPN) + код комнаты в якоре: пульт подключается сам
-    const url=location.origin+location.pathname+'#remote='+code;
-    $('#qr').innerHTML=''; new QRCode($('#qr'),{text:url,width:128,height:128,colorDark:'#04140a',colorLight:'#ffffff'});
-  });
-  peer.on('connection',c=>{ conns.push(c); setupScreenConn(c);
-    c.on('close',()=>{ conns=conns.filter(x=>x!==c); }); });
-  peer.on('error',e=>{
-    if(e.type==='unavailable-id'){ startScreen(randCode()); return; }   // код занят — берём другой
-    $('#scrStatus').innerHTML='ошибка связи: '+e.type+(e.type==='network'||e.type==='server-error'||e.type==='socket-error'?' — сервер связи недоступен из этой сети (включите VPN) · <a href="test.html" style="color:inherit">проверка связи</a>':'');
-  });
+const stage=$('#stage'); let curUrl=null;
+function setStage(node){ if(curUrl){ URL.revokeObjectURL(curUrl); curUrl=null; } stage.innerHTML=''; if(node) stage.appendChild(node); }
+function showMedia(src,kind){
+  if(kind==='video'){
+    const v=document.createElement('video'); v.src=src; v.autoplay=true; v.loop=true; v.playsInline=true; v.setAttribute('playsinline','');
+    v.play().catch(()=>{ v.muted=true; v.play().catch(()=>{}); }); setStage(v);
+  } else { const img=new Image(); img.src=src; setStage(img); }
+  $('#scrInfo').classList.add('hide');
 }
-
-const stage=$('#stage');
-let incoming=null, curUrl=null;
-function setStage(node){
-  if(curUrl){ URL.revokeObjectURL(curUrl); curUrl=null; }
-  stage.innerHTML=''; if(node) stage.appendChild(node);
+function handle(d){
+  if(!d||!d.t) return;
+  if(d.t==='fc'){ // кусок фото (запасной путь через MQTT)
+    const f=incoming[d.f]; if(!f||f.p[d.k]!=null) return; f.p[d.k]=d.d; f.got++;
+    if(f.got===f.n){ delete incoming[d.f]; showMedia('data:'+f.mime+';base64,'+f.p.join(''),'image'); }
+    return;
+  }
+  if(!d.i||seen[d.i]) return; seen[d.i]=1;   // одна команда приходит по нескольким каналам
+  if(role!=='screen') return;
+  if(d.t==='black'||d.t==='clear') setStage(null);
+  else if(d.t==='stopsound'){ sounds.forEach(a=>{try{a.pause()}catch(e){}}); sounds=[]; }
+  else if(d.t==='sound'&&d.url) playSound(d.url);
+  else if(d.t==='show'&&d.u) showMedia(d.u,d.kind);
+  else if(d.t==='fb'){ incoming[d.i]={n:d.n,mime:d.mime,p:new Array(d.n),got:0}; $('#scrStatus').textContent='приём фото…'; }
 }
-let sounds=[];   // играющие Audio
-function setupScreenConn(c){
-  c.on('data',d=>{
-    if(!d||!d.t) return;
-    if(d.t==='black'||d.t==='clear'){ setStage(null); }
-    else if(d.t==='stopsound'){ sounds.forEach(a=>{try{a.pause()}catch(e){}}); sounds=[]; }
-    else if(d.t==='sound'){ playSound(d.url); }
-    else if(d.t==='file-begin'){ incoming={mime:d.mime,kind:d.kind,parts:[],got:0,size:d.size}; $('#scrStatus').textContent='приём файла…'; $('#scrInfo').classList.remove('hide'); }
-    else if(d.t==='chunk' && incoming){
-      incoming.parts.push(d.b); incoming.got+=(d.b.byteLength||d.b.length||0);
-      if(d.last){
-        const blob=new Blob(incoming.parts,{type:incoming.mime}); curUrl=URL.createObjectURL(blob);
-        if(incoming.kind==='video'){
-          const v=document.createElement('video'); v.src=curUrl; v.autoplay=true; v.loop=true; v.controls=false;
-          v.playsInline=true; v.setAttribute('playsinline',''); v.muted=false;
-          v.play().catch(()=>{ v.muted=true; v.play().catch(()=>{}); });
-          setStage(v);
-        } else {
-          const img=new Image(); img.src=curUrl; setStage(img);
-        }
-        incoming=null; $('#scrInfo').classList.add('hide');
-      }
-    }
-  });
-}
-function playSound(url){
-  try{
-    const a=new Audio(url); a.crossOrigin='anonymous';
-    a.play().then(()=>sounds.push(a)).catch(()=>{ /* заблокировано — откроем страницу */ window.open(url,'_blank'); });
-  }catch(e){ window.open(url,'_blank'); }
-}
+function playSound(url){ try{ const a=new Audio(url); a.play().then(()=>sounds.push(a)).catch(()=>{ $('#tapHint').style.display='block'; $('#tapHint').textContent='нажмите на экран — браузер не разрешил звук'; }); }catch(e){} }
 
 /* ===================== ПУЛЬТ ===================== */
-function goRemote(pref){
-  $('#home').style.display='none'; $('#remote').style.display='block';
-  if(pref) $('#codeIn').value=pref;
-  loadPad();
-}
+function goRemote(pref){ role='remote'; $('#home').style.display='none'; $('#remote').style.display='block'; if(pref) $('#codeIn').value=pref; loadPad(); }
 function connect(){
   const code=($('#codeIn').value||'').trim().toUpperCase();
-  if(code.length<4) return alert('Введите код из 4 символов');
-  if(peer) try{peer.destroy()}catch(e){}
-  peer=new Peer({debug:1});
-  peer.on('open',()=>{
-    conn=peer.connect(peerId(code),{reliable:true});
-    conn.on('open',()=>{ $('#connCard').style.display='none'; $('#ctrls').style.display='block'; setDot(true); });
-    conn.on('close',()=>setDot(false));
-    conn.on('error',()=>setDot(false));
-  });
-  peer.on('error',e=>{ setDot(false); $('#stat').textContent='не удалось: '+e.type+' — проверьте код и Wi-Fi'; });
+  if(code.length<4) return alert('Введите код с экрана');
+  CODE=code; $('#connCard').style.display='none'; $('#ctrls').style.display='block';
+  chStatus(); startChannels();
 }
-function setDot(on){ $('#dot').classList.toggle('on',on); $('#stat').textContent=on?'связь есть':'нет связи'; }
-function send(o){ if(conn&&conn.open){ conn.send(o); return true; } setDot(false); return false; }
 
-/* саундпад в localStorage */
-function loadPad(){ try{ sounds_arr=JSON.parse(localStorage.getItem('krisa37.pad')||'[]'); }catch(e){ sounds_arr=[]; } renderPad(); }
-let sounds_arr=[];
-function savePad(){ localStorage.setItem('krisa37.pad',JSON.stringify(sounds_arr)); }
+/* саундпад: библиотека сайта + свои звуки (localStorage) */
+let sounds_arr=[], libSounds=[];
+function loadPad(){
+  try{ sounds_arr=JSON.parse(localStorage.getItem('krisa37.pad')||'[]'); }catch(e){ sounds_arr=[]; } renderPad();
+  fetch('../pad/lib.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.json()).then(l=>{
+    libSounds=(l.sounds||[]).map(s=>({name:s.n,url:s.u||new URL('../pad/files/'+s.f,location.href).href})); renderPad(); }).catch(()=>{});
+}
+function savePad(){ try{ localStorage.setItem('krisa37.pad',JSON.stringify(sounds_arr)); }catch(e){} }
 function renderPad(){
   const pad=$('#pad'); pad.innerHTML='';
-  sounds_arr.forEach((s,i)=>{
-    const b=document.createElement('button'); b.className='snd'; b.textContent=s.name;
-    b.onclick=()=>send({t:'sound',url:s.url});
-    const x=document.createElement('span'); x.className='x'; x.textContent='×';
-    x.onclick=e=>{ e.stopPropagation(); if(confirm('Удалить «'+s.name+'»?')){ sounds_arr.splice(i,1); savePad(); renderPad(); } };
-    b.appendChild(x); pad.appendChild(b);
-  });
-  if(!sounds_arr.length){ const d=document.createElement('div'); d.className='dim'; d.style.gridColumn='1/-1';
-    d.style.fontSize='13px'; d.textContent='Пусто. «+ звук» → название и прямая ссылка на .mp3.'; pad.appendChild(d); }
+  const mk=(s,del)=>{ const b=document.createElement('button'); b.className='snd'; b.textContent=s.name;
+    b.onclick=()=>{ send({t:'sound',url:s.url}); try{navigator.vibrate&&navigator.vibrate(15)}catch(e){} };
+    if(del){ const x=document.createElement('span'); x.className='x'; x.textContent='×'; x.onclick=e=>{ e.stopPropagation(); if(confirm('Удалить «'+s.name+'»?')) del(); }; b.appendChild(x); }
+    pad.appendChild(b); };
+  libSounds.forEach(s=>mk(s));
+  sounds_arr.forEach((s,i)=>mk(s,()=>{ sounds_arr.splice(i,1); savePad(); renderPad(); }));
+  if(!libSounds.length&&!sounds_arr.length){ const d=document.createElement('div'); d.className='dim'; d.style.cssText='grid-column:1/-1;font-size:13px'; d.textContent='Пусто. «+ звук» → название и прямая ссылка на .mp3.'; pad.appendChild(d); }
 }
 function addSound(){
   const name=prompt('Название кнопки:'); if(!name) return;
@@ -269,45 +259,46 @@ function addSound(){
   sounds_arr.push({name:name.slice(0,24),url:url.trim()}); savePad(); renderPad();
 }
 
-/* передача файла из галереи по кускам */
+/* фото/видео: файл на ntfy.sh (до 15 МБ), экран получает ссылку; если ntfy недоступен — фото кусками через MQTT */
+function prog(p){ const pr=$('#prog'), bar=pr.firstElementChild; pr.style.display=p==null?'none':'block'; bar.style.width=(p||0)+'%'; }
 async function pickFile(input){
   const f=input.files&&input.files[0]; input.value=''; if(!f) return;
-  if(!conn||!conn.open) return alert('Нет связи с экраном');
   const kind=f.type.startsWith('video')?'video':'image';
   let blob=f;
-  if(kind==='image' && f.size>400*1024){ try{ blob=await downscale(f,1920); }catch(e){} }
-  const buf=await blob.arrayBuffer();
-  send({t:'file-begin',mime:blob.type||f.type||'application/octet-stream',size:buf.byteLength,kind});
-  const CH=64*1024, prog=$('#prog'), bar=prog.firstElementChild; prog.style.display='block';
-  for(let o=0;o<buf.byteLength;o+=CH){
-    const end=Math.min(o+CH,buf.byteLength);
-    send({t:'chunk',b:buf.slice(o,end),last:end>=buf.byteLength});
-    bar.style.width=(end/buf.byteLength*100)+'%';
-    await drain();
+  if(kind==='image'){ try{ blob=await downscale(f,1920,0.88); }catch(e){} }
+  if(blob.size>15*1024*1024) return alert('Файл больше 15 МБ — выберите покороче/поменьше');
+  const id=uid(); prog(5); $('#stat').textContent='отправка файла…';
+  const ok=await new Promise(res=>{
+    const x=new XMLHttpRequest(); x.open('PUT','https://ntfy.sh/'+topic());
+    x.setRequestHeader('Filename',(kind==='video'?'v':'p')+id+(kind==='video'?'.mp4':'.jpg'));
+    x.setRequestHeader('Message',JSON.stringify({t:'show',kind,i:id}));
+    x.upload.onprogress=e=>{ if(e.lengthComputable) prog(5+e.loaded/e.total*90); };
+    x.onload=()=>{ try{ const r=JSON.parse(x.responseText); if(x.status<300&&r.attachment){ send({t:'show',kind,u:r.attachment.url,i:id},true); return res(true); } }catch(e){} res(false); };
+    x.onerror=()=>res(false); x.send(blob);
+  });
+  if(!ok){
+    if(kind==='video'){ prog(null); chStatus(); return alert('Видео не отправилось: ntfy.sh недоступен или лимит. Попробуйте через минуту или включите VPN.'); }
+    try{ await sendChunks(await downscale(f,1280,0.8)); }catch(e){ alert('Не удалось отправить фото'); }
   }
-  setTimeout(()=>{ prog.style.display='none'; bar.style.width='0'; },600);
+  prog(100); setTimeout(()=>prog(null),600); chStatus();
 }
-function drain(){ return new Promise(res=>{
-  const dc=conn&&conn.dataChannel; // поток не захлёбываем
-  if(dc && dc.bufferedAmount>512*1024){ const t=setInterval(()=>{ if(dc.bufferedAmount<128*1024){clearInterval(t);res();} },30); }
-  else setTimeout(res,0);
-}); }
-/* уменьшить фото через canvas */
-function downscale(file,max){ return new Promise((res,rej)=>{
+async function sendChunks(b){
+  const s=await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(fr.result.split(',')[1]); fr.readAsDataURL(b); });
+  const CS=48000, n=Math.ceil(s.length/CS), id=uid();
+  send({t:'fb',n,mime:'image/jpeg',i:id},true);
+  for(let k=0;k<n;k++){ await new Promise(r=>setTimeout(r,120)); mqttSend(JSON.stringify({t:'fc',f:id,k,d:s.substr(k*CS,CS)})); prog(k/n*100); }
+}
+function downscale(file,max,q){ return new Promise((res,rej)=>{
   const img=new Image(), u=URL.createObjectURL(file);
-  img.onload=()=>{ let {width:w,height:h}=img; const k=Math.min(1,max/Math.max(w,h));
+  img.onload=()=>{ const w=img.width,h=img.height, k=Math.min(1,max/Math.max(w,h));
     const c=document.createElement('canvas'); c.width=Math.round(w*k); c.height=Math.round(h*k);
     c.getContext('2d').drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(u);
-    c.toBlob(b=>b?res(b):rej(),'image/jpeg',0.9); };
+    c.toBlob(b=>b?res(b):rej(),'image/jpeg',q||0.9); };
   img.onerror=()=>{ URL.revokeObjectURL(u); rej(); }; img.src=u;
 }); }
 
-/* авто-режим по ссылке #remote=CODE / #screen */
-(function(){ const h=location.hash||'';
-  const m=h.match(/remote=([A-Za-z0-9]{1,4})/);
-  if(m){ goRemote(m[1].toUpperCase()); }
-  else if(h.indexOf('screen')>=0){ /* требуется жест пользователя для fullscreen/звука — покажем кнопку */ }
-})();
+/* авто-режим по ссылке #remote=CODE (из QR) */
+(function(){ const m=(location.hash||'').match(/remote=([A-Za-z0-9]{4,5})/); if(m){ goRemote(m[1].toUpperCase()); connect(); } })();
 </script>
 </body>
 </html>

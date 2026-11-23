@@ -70,7 +70,7 @@ input{font:inherit;width:100%;background:#050806;color:#7dff9a;border:1px solid 
 <script>
 var $=function(id){return document.getElementById(id)};
 var CODE='', role='', seen={}, sounds=[], audios=[];
-var CH={ntfy:0,emqx:0,hive:0};
+var CH={ntfy:0,emqx:0,hive:0,mosq:0};
 function topic(){ return 'krisa37sp-'+CODE; }
 function chStatus(){ var h=Object.keys(CH).map(function(k){return '<span class="ch"><i class="'+(CH[k]?'on':'')+'"></i>'+k+'</span>'}).join('');
   var any=Object.keys(CH).some(function(k){return CH[k]}); h+= any?'— связь есть':'— подключение…';
@@ -87,7 +87,7 @@ function startChannels(onMsg){
   }catch(e){ setTimeout(c,5000); } })();
   // MQTT
   if(window.mqtt){
-    [['emqx','wss://broker.emqx.io:8084/mqtt'],['hive','wss://broker.hivemq.com:8884/mqtt']].forEach(function(b){
+    [['emqx','wss://broker.emqx.io:8084/mqtt'],['hive','wss://broker.hivemq.com:8884/mqtt'],['mosq','wss://test.mosquitto.org:8081']].forEach(function(b){
       try{ var cl=mqtt.connect(b[1],{clientId:'k37'+Math.random().toString(16).slice(2,10),reconnectPeriod:3000,connectTimeout:8000,clean:true});
         mq[b[0]]=cl;
         cl.on('connect',function(){ setCh(b[0],1); cl.subscribe(topic()); });
