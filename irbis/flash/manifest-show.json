@@ -1,0 +1,6 @@
+{
+  "name": "krisa37 Шоу — ESP32-S3",
+  "version": "show-1.0",
+  "new_install_prompt_erase": true,
+  "builds": [ { "chipFamily": "ESP32-S3", "parts": [{ "path": "krisa37-show.bin", "offset": 0 }] } ]
+}

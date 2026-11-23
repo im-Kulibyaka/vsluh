@@ -20,6 +20,7 @@ jobs:
           $HOME/bin/arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           $HOME/bin/arduino-cli core update-index
           $HOME/bin/arduino-cli core install esp32:esp32@3.0.7
+          $HOME/bin/arduino-cli lib install "WebSockets"      # для «Шоу»-прошивки (локальный веб-сервер)
       - name: Build (ESP32-S3 SuperMini, USB-OTG TinyUSB, 4 MB)
         run: |
           arduino-cli compile --fqbn "esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default,FlashSize=4M,PartitionScheme=default" \
@@ -55,6 +56,11 @@ jobs:
             --export-binaries --output-dir out-s3bt s3bt/krisa37-hid-s3bt
           cp out-s3bt/krisa37-hid-s3bt.ino.merged.bin krisa37-hid-s3bt.bin
           cp out-s3bt/krisa37-hid-s3bt.ino.bin krisa37-hid-s3bt-app.bin
+      - name: Build «Шоу» (ESP32-S3 Wi-Fi сервер показа, N16R8 opi)
+        run: |
+          arduino-cli compile --fqbn "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=4M,PartitionScheme=default,PSRAM=opi" \
+            --export-binaries --output-dir out-show firmware/krisa37-show
+          cp out-show/krisa37-show.ino.merged.bin krisa37-show.bin
       - uses: actions/upload-artifact@v4
         with:
           name: krisa37-hid
@@ -67,3 +73,4 @@ jobs:
             krisa37-hid-app.bin
             krisa37-hid-c3-app.bin
             krisa37-hid-s3bt-app.bin
+            krisa37-show.bin

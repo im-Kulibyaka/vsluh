@@ -65,6 +65,12 @@
       </esp-web-install-button>
     </p>
     <p class="note">Второй режим для ESP32-S3: плата работает <b>по Bluetooth</b> (как ESP32-C3) — подключается к ТВ, телефону или ПК в их настройках Bluetooth, USB не нужен. Для обычного режима (в USB доски) берите кнопку выше.</p>
+    <p style="margin-top:18px">
+      <esp-web-install-button manifest="manifest-show.json">
+        <button slot="activate">⚡ ESP32-S3 — режим «Шоу» (Wi-Fi)</button>
+      </esp-web-install-button>
+    </p>
+    <p class="note">Отдельный режим для ESP32-S3: плата создаёт свою Wi-Fi «krisa37-show» (пароль <b>krisa3737</b>) и работает локальным сервером показа. Доска/ТВ и телефон подключаются к этой Wi-Fi и открывают <b>http://192.168.4.1</b> — чёрный экран, саундпад и показ фото/видео, всё через плату, без интернета. Это не «мышь/клавиатура» — для пульта/геймпада берите обычную прошивку выше.</p>
     <p class="note">Нужен компьютер с Chrome или Edge (Windows, macOS, Linux). С телефона прошить нельзя.</p>
   </div>
 
