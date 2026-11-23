@@ -23,6 +23,9 @@ static const char *AP_PASS = "krisa3737";      // не короче 8 симво
 WebServer http(80);
 WebSocketsServer ws(81);
 
+void handleRoot();   // прототип: функция определена ниже, но нужна в setup()
+void led(uint8_t r, uint8_t g, uint8_t b);
+
 /* ---------- веб-страница (экран + пульт в одном файле) ---------- */
 static const char PAGE[] PROGMEM = R"HTML(<!doctype html>
 <html lang="ru"><head><meta charset="utf-8">
