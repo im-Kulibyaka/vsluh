@@ -743,6 +743,8 @@ struct HelpWeb: UIViewRepresentable {
 /// Веб-экран со страницей по URL (например, «Саундпад и показ» /pad/). Наш сайт — внутри, прочие ссылки — в Safari.
 struct PadWeb: UIViewRepresentable {
     let url: String
+    /// Прозрачный фон: сквозь страницу виден фон темы приложения.
+    var clear: Bool = false
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -763,8 +765,8 @@ struct PadWeb: UIViewRepresentable {
         web.navigationDelegate = context.coordinator
         web.uiDelegate = context.coordinator
         web.isOpaque = false
-        web.backgroundColor = .black
-        web.scrollView.backgroundColor = .black
+        web.backgroundColor = clear ? .clear : .black
+        web.scrollView.backgroundColor = clear ? .clear : .black
         if let u = URL(string: url) { web.load(URLRequest(url: u)) }
         return web
     }

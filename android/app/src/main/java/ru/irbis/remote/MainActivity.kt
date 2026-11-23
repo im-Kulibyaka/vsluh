@@ -1820,7 +1820,22 @@ class MainActivity : Activity() {
     private var showLoaded = -1
     private var webFileCb: android.webkit.ValueCallback<Array<android.net.Uri>>? = null
 
-    private fun showUrl() = if (showMode == 1) SHOW_URL else "$PAD_URL?app=1"
+    /** Адрес страницы шоу с темой приложения: цвета, шрифт, заливка кнопок; tr — прозрачный фон (виден фон приложения). */
+    private fun showUrl(tr: Boolean = true) = (if (showMode == 1) SHOW_URL else PAD_URL) + "?" + themeQuery(tr)
+
+    private fun hex6(c: Int) = String.format("%06X", c and 0xFFFFFF)
+    private fun themeQuery(tr: Boolean): String {
+        val t = if (Term.prism) "prism" else if (Term.thermal) "thermal" else if (Term.blueprint) "blueprint" else "terminal"
+        val panel = when { Term.prism -> Color.argb(30, 255, 255, 255); Term.thermal -> Color.argb(170, 0, 0, 0); Term.blueprint -> Blueprint.PANEL; else -> Color.BLACK }
+        val line = if (Term.thermal) Heat.YELLOW else Term.LINE
+        val on = when {
+            Term.prism -> Term.IRIS.take(5)
+            Term.thermal -> listOf(Heat.color(0.55f), Heat.color(0.72f), Heat.color(0.86f))
+            else -> listOf(Term.FG)
+        }.joinToString(",") { hex6(it) }
+        return "app=1&t=$t&fg=${hex6(Term.FG)}&dim=${hex6(Term.DIM)}&line=${hex6(line)}&ink=${hex6(Term.onBoxText())}" +
+            "&panel=${hex6(panel)}${String.format("%02X", (panel ushr 24) and 0xFF)}&bg=${hex6(Term.BG)}&on=$on" + (if (tr) "&tr=1" else "")
+    }
 
     /** WebView со страницами шоу: JS, localStorage (токен), выбор файлов из галереи; наш сайт — внутри, прочее — в браузер. */
     private fun makeShowWeb(): android.webkit.WebView = android.webkit.WebView(this).apply {
@@ -1853,6 +1868,7 @@ class MainActivity : Activity() {
             showMode = i; prefs.edit().putInt("show_mode", i).apply(); showWebLoad()
         }, LinearLayout.LayoutParams(-1, -2))
         val web = makeShowWeb().apply {
+            setBackgroundColor(Color.TRANSPARENT)   // сквозь страницу виден фон темы (лог, «Матрица», призма, чертёж)
             // страница прокручивается внутри, а не вся вкладка
             setOnTouchListener { v, _ -> v.parent?.requestDisallowInterceptTouchEvent(true); false }
         }
@@ -1862,7 +1878,7 @@ class MainActivity : Activity() {
         fun btn(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 13f else 15f) }
         p.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(btn("[ ⛶ на весь экран ]") { showFullWeb(showUrl()) }, LinearLayout.LayoutParams(0, dp(46), 1.4f))
+            addView(btn("[ ⛶ на весь экран ]") { showFullWeb(showUrl(false)) }, LinearLayout.LayoutParams(0, dp(46), 1.4f))
             addView(btn("[ ⟳ ]") { showWeb?.reload() }, LinearLayout.LayoutParams(0, dp(46), 0.6f).apply { leftMargin = dp(6) })
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         p.addView(text("«Саундпад» — звуки и фото/видео (вкладка «Библиотека» внутри — загрузка на GitHub по ключу администратора). «Экран·пульт» — чёрный экран на доске и пульт с телефона по коду комнаты.", 12f, Term.DIM).apply {

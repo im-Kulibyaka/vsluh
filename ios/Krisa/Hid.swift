@@ -2778,9 +2778,31 @@ struct ShowTabPanel: View {
     @AppStorage("show_mode") private var mode = 0
     @State private var full = false
     @State private var reloadKey = 0
-    private var url: String {
-        mode == 1 ? "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/"
-                  : "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/pad/?app=1"
+    private func url(_ tr: Bool) -> String {
+        (mode == 1 ? "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/"
+                   : "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/pad/") + "?" + ShowTabPanel.themeQuery(tr)
+    }
+
+    private static func hex(_ c: Color) -> String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(c).getRed(&r, green: &g, blue: &b, alpha: &a)
+        func n(_ v: CGFloat) -> Int { Int((min(max(v, 0), 1) * 255).rounded()) }
+        return String(format: "%02X%02X%02X", n(r), n(g), n(b))
+    }
+
+    /// Тема приложения для встроенной страницы шоу (цвета, шрифт, заливка кнопок); tr — прозрачный фон.
+    static func themeQuery(_ tr: Bool) -> String {
+        let t: String = Term.prism ? "prism" : Term.thermal ? "thermal" : Term.blueprint ? "blueprint" : "terminal"
+        let ink: String = Term.prism ? "120E1F" : Term.thermal ? hex(Heat.ink) : Term.blueprint ? hex(Term.bg) : "000000"
+        let panel: String = Term.prism ? "FFFFFF1E" : Term.thermal ? "000000AA" : Term.blueprint ? hex(Term.bg) + "C7" : "000000FF"
+        let line: String = Term.thermal ? hex(Heat.yellow) : hex(Term.line)
+        let on: [String] = Term.prism ? Prism.irisHex.prefix(5).map { String(format: "%06X", $0) }
+            : Term.thermal ? [hex(Heat.color(0.55)), hex(Heat.color(0.72)), hex(Heat.color(0.86))]
+            : [hex(Term.fg)]
+        var q: String = "app=1&t=\(t)&fg=\(hex(Term.fg))&dim=\(hex(Term.dim))&line=\(line)&ink=\(ink)"
+        q += "&panel=\(panel)&bg=\(hex(Term.bg))&on=\(on.joined(separator: ","))"
+        if tr { q += "&tr=1" }
+        return q
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -2788,8 +2810,8 @@ struct ShowTabPanel: View {
                 Button { mode = 0 } label: { TabLabel(title: "саундпад", on: mode == 0, height: 36, ruSize: 13, forceRu: true) }
                 Button { mode = 1 } label: { TabLabel(title: "экран·пульт", on: mode == 1, height: 36, ruSize: 13, forceRu: true) }
             }
-            PadWeb(url: url)
-                .id("\(url)-\(reloadKey)")
+            PadWeb(url: url(true), clear: true)
+                .id("\(url(true))-\(reloadKey)")
                 .frame(height: UIScreen.main.bounds.height * 0.72)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             HStack(spacing: 6) {
@@ -2802,7 +2824,7 @@ struct ShowTabPanel: View {
         }
         .fullScreenCover(isPresented: $full) {
             ZStack(alignment: .topTrailing) {
-                PadWeb(url: url).ignoresSafeArea()
+                PadWeb(url: url(false)).ignoresSafeArea()
                 Button { full = false } label: { Text("✕").font(.system(size: 28)).foregroundColor(.white).padding(16) }
             }
         }
