@@ -826,8 +826,6 @@ struct TouchpadPanel: View {
                 PresenterPanel(model: model)
             } else if sub == 6 {
                 FirmwarePanel(model: model)
-            } else if sub == 7 {
-                ShowLibPanel()
             } else {
                 touchArea
             }
@@ -854,7 +852,6 @@ struct TouchpadPanel: View {
                 subChip(4, "геймпад")
                 subChip(5, "презентер")
                 subChip(6, "прошивка")
-                subChip(7, "библиотека")
             }
         }
     }
@@ -2776,26 +2773,37 @@ struct PresenterPanel: View {
 
 // MARK: - Прошивка (OTA)
 
-/// Подвкладка «библиотека»: саундпад и показ с выгрузкой на GitHub — встроенный веб-экран (/pad/).
-struct ShowLibPanel: View {
-    @State private var show = false
-    @State private var hash = "#lib"
-    private let pad = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/pad/"
+/// Вкладка «Шоу»: саундпад и показ (/pad/, с «Библиотекой» внутри) или экран/пульт по коду (/show/).
+struct ShowTabPanel: View {
+    @AppStorage("show_mode") private var mode = 0
+    @State private var full = false
+    @State private var reloadKey = 0
+    private var url: String {
+        mode == 1 ? "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/"
+                  : "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/pad/?app=1"
+    }
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Библиотека показа: саундпад и фото/видео. Файлы хранятся на GitHub, показ — на странице «Саундпад и показ».")
-                .font(Term.ru(13)).foregroundColor(Term.dim).fixedSize(horizontal: false, vertical: true)
-            Button { hash = "#lib"; show = true } label: { TabLabel(title: "📚 Библиотека (загрузка на GitHub)", on: true, height: 52, ruSize: 16, forceRu: true) }
-            Text("Добавить звук/фото/видео → загрузится в репозиторий (нужен ваш GitHub-токен, вводится один раз внутри). Через ~1 мин появится в показе.")
-                .font(Term.ru(12)).foregroundColor(Term.dim).fixedSize(horizontal: false, vertical: true)
-            Button { hash = ""; show = true } label: { TabLabel(title: "▶ Открыть показ", on: false, height: 52, ruSize: 16, forceRu: true) }
-            Text("Показ открывайте прямо на доске (она сенсорная) — жмёте звуки/фото на ней. Телефоном-пультом отдельно не выйдет без платы/сервера.")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Button { mode = 0 } label: { TabLabel(title: "саундпад", on: mode == 0, height: 36, ruSize: 13, forceRu: true) }
+                Button { mode = 1 } label: { TabLabel(title: "экран·пульт", on: mode == 1, height: 36, ruSize: 13, forceRu: true) }
+            }
+            PadWeb(url: url)
+                .id("\(url)-\(reloadKey)")
+                .frame(height: UIScreen.main.bounds.height * 0.72)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            HStack(spacing: 6) {
+                Button { full = true } label: { TabLabel(title: "⛶ на весь экран", on: false, height: 44, ruSize: 14, forceRu: true) }
+                Button { reloadKey += 1 } label: { TabLabel(title: "⟳", on: false, height: 44, ruSize: 14, forceRu: true) }
+                    .frame(width: 70)
+            }
+            Text("«Саундпад» — звуки и фото/видео (вкладка «Библиотека» внутри — загрузка на GitHub по ключу администратора). «Экран·пульт» — чёрный экран на доске и пульт с телефона по коду комнаты.")
                 .font(Term.ru(12)).foregroundColor(Term.dim).fixedSize(horizontal: false, vertical: true)
         }
-        .fullScreenCover(isPresented: $show) {
+        .fullScreenCover(isPresented: $full) {
             ZStack(alignment: .topTrailing) {
-                PadWeb(url: pad + hash).ignoresSafeArea()
-                Button { show = false } label: { Text("✕").font(.system(size: 28)).foregroundColor(.white).padding(16) }
+                PadWeb(url: url).ignoresSafeArea()
+                Button { full = false } label: { Text("✕").font(.system(size: 28)).foregroundColor(.white).padding(16) }
             }
         }
     }

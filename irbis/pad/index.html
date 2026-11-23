@@ -38,7 +38,7 @@ label.file input{display:none}
 </style></head><body>
 
 <div class="wrap">
-  <p class="dim"><a href="../">← krisa37™</a></p>
+  <p class="dim" id="back"><a href="../">← krisa37™</a></p>
   <h1>Саундпад и показ</h1>
   <div class="tabs">
     <button class="tab on" id="tShow" onclick="tab('show')">Показ</button>
@@ -183,5 +183,6 @@ function hideProg(){ setTimeout(function(){ $('prog').style.display='none'; $('p
 /* старт */
 try{ $('tok').value=token(); }catch(e){}
 if((location.hash||'').indexOf('lib')>=0) tab('lib');
+if(location.search.indexOf('app=1')>=0){ var bk=$('back'); if(bk) bk.style.display='none'; }
 refresh();
 </script></body></html>
