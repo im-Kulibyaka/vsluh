@@ -30,18 +30,22 @@ input{font:inherit;width:100%;background:#050806;color:#7dff9a;border:1px solid 
 #sinfo.hide{opacity:0;pointer-events:none}
 #code{font-family:VT323,monospace;font-size:72px;line-height:1;letter-spacing:10px;margin:6px 0}
 #qr{display:inline-block;background:#fff;padding:8px;border-radius:8px;margin-top:6px}
+#stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}#stage img,#stage video{max-width:100%;max-height:100%}
+#prog{height:6px;background:#1f3b27;border-radius:4px;overflow:hidden;margin-top:8px;display:none}#prog>i{display:block;height:100%;width:0;background:#7dff9a}
+label.file input{display:none}
 #now{position:absolute;left:0;right:0;bottom:22px;text-align:center;font-size:15px;opacity:.55}
 </style></head><body>
 
 <div class="wrap" id="home">
   <h1>Sound pad</h1>
-  <p class="dim">Чёрный экран на доске/ТВ играет звуки, которые вы жмёте на телефоне. Звуки — из библиотеки саундпада. Команды идут сразу по нескольким каналам, поэтому обычно работает и без VPN.</p>
+  <p class="dim">Чёрный экран на доске/ТВ играет звуки и показывает фото/видео с телефона. Звуки — из библиотеки саундпада. Команды идут сразу по нескольким каналам, поэтому обычно работает и без VPN.</p>
   <button class="big" onclick="goScreen()">▣ Экран (чёрный, играет звуки)</button>
   <button class="big" onclick="goRemote()">♫ Пульт (саундпад на телефоне)</button>
   <p class="dim" style="font-size:13px"><a href="../show/" onclick="this.href='../show/'+location.search">← другие режимы «Шоу»</a></p>
 </div>
 
 <div id="screen">
+  <div id="stage"></div>
   <div id="sinfo">
     <div class="dim">код — введите на телефоне в «Пульте»</div>
     <div id="code">·····</div>
@@ -61,6 +65,12 @@ input{font:inherit;width:100%;background:#050806;color:#7dff9a;border:1px solid 
   </div>
   <div id="ctrls" style="display:none">
     <div class="st" id="rst"></div>
+    <div class="card">
+      <label class="file"><span class="big" style="margin:0;text-align:center">🖼 Показать фото / видео</span>
+        <input type="file" accept="image/*,video/*" onchange="pickFile(this)"></label>
+      <div id="prog"><i></i></div>
+      <button class="ghost" style="margin-top:8px;width:100%" onclick="send({t:'c'})">✖ Убрать фото</button>
+    </div>
     <div class="card"><div class="pad" id="pad"></div>
       <button class="ghost" style="margin-top:10px;width:100%" onclick="send({t:'s'})">⏹ Остановить звук</button></div>
     <p class="dim" style="font-size:12px">Звуки добавляются в «Саундпад и показ» → «Библиотека». <a href="#" onclick="loadLib();return false">⟳ обновить список</a></p>
@@ -69,7 +79,7 @@ input{font:inherit;width:100%;background:#050806;color:#7dff9a;border:1px solid 
 
 <script>
 var $=function(id){return document.getElementById(id)};
-var CODE='', role='', seen={}, sounds=[], audios=[];
+var CODE='', role='', seen={}, sounds=[], audios=[], parts={};
 var CH={ntfy:0,emqx:0,hive:0,mosq:0};
 function topic(){ return 'krisa37sp-'+CODE; }
 function chStatus(){ var h=Object.keys(CH).map(function(k){return '<span class="ch"><i class="'+(CH[k]?'on':'')+'"></i>'+k+'</span>'}).join('');
@@ -83,7 +93,8 @@ function startChannels(onMsg){
   // ntfy.sh
   (function c(){ try{ var ws=new WebSocket('wss://ntfy.sh/'+topic()+'/ws');
     ws.onopen=function(){setCh('ntfy',1)}; ws.onclose=function(){setCh('ntfy',0); setTimeout(c,3000)};
-    ws.onmessage=function(e){ try{ var d=JSON.parse(e.data); if(d.event==='message') onMsg(d.message); }catch(_){} };
+    ws.onmessage=function(e){ try{ var d=JSON.parse(e.data); if(d.event!=='message') return; var m=d.message;
+      if(d.attachment&&d.attachment.url){ try{ var o=JSON.parse(m); o.u=d.attachment.url; m=JSON.stringify(o); }catch(_){} } onMsg(m); }catch(_){} };
   }catch(e){ setTimeout(c,5000); } })();
   // MQTT
   if(window.mqtt){
@@ -97,18 +108,26 @@ function startChannels(onMsg){
     });
   }
 }
-function send(o){
-  o.i=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function mqttSend(m){ Object.keys(mq).forEach(function(k){ try{ if(mq[k].connected) mq[k].publish(topic(),m); }catch(e){} }); }
+function send(o,noNtfy){
+  o.i=o.i||uid();
   var m=JSON.stringify(o);
-  fetch('https://ntfy.sh/'+topic(),{method:'POST',body:m}).then(function(r){ if(r.ok) setCh('ntfy',1); }).catch(function(){});
+  if(!noNtfy) fetch('https://ntfy.sh/'+topic(),{method:'POST',body:m}).then(function(r){ if(r.ok) setCh('ntfy',1); }).catch(function(){});
   Object.keys(mq).forEach(function(k){ try{ if(mq[k].connected) mq[k].publish(topic(),m); }catch(e){} });
 }
 function handle(m){
   var d; try{ d=JSON.parse(m); }catch(_){ return; }
-  if(!d||!d.i||seen[d.i]) return; seen[d.i]=1;            // одна команда приходит по нескольким каналам — играем один раз
+  if(!d) return;
+  if(d.t==='fc'){ var f=parts[d.f]; if(!f||f.p[d.k]!=null) return; f.p[d.k]=d.d; f.got++;      // кусок фото (запасной путь)
+    if(f.got===f.n){ delete parts[d.f]; showMedia('data:image/jpeg;base64,'+f.p.join(''),'image'); } return; }
+  if(!d.i||seen[d.i]) return; seen[d.i]=1;            // одна команда приходит по нескольким каналам — играем один раз
   if(role!=='screen') return;
   if(d.t==='p'&&d.u){ try{ var a=new Audio(d.u); a.play().catch(function(){}); audios.push(a); }catch(e){}
     $('now').textContent='♫ '+(d.n||''); clearTimeout(handle.t); handle.t=setTimeout(function(){$('now').textContent=''},2500); }
+  else if(d.t==='m'&&d.u) showMedia(d.u,d.kind);
+  else if(d.t==='c') $('stage').innerHTML='';
+  else if(d.t==='fb') parts[d.i]={n:d.n,p:new Array(d.n),got:0};
   else if(d.t==='s'){ audios.forEach(function(a){try{a.pause()}catch(e){}}); audios=[]; $('now').textContent=''; }
 }
 
@@ -147,6 +166,45 @@ function render(){
     p.appendChild(b); });
   if(!sounds.length){ var d=document.createElement('div'); d.className='dim'; d.style.cssText='grid-column:1/-1;font-size:13px';
     d.textContent='Пусто. Добавьте звуки в «Саундпад и показ» → «Библиотека».'; p.appendChild(d); }
+}
+
+function showMedia(src,kind){
+  var st=$('stage'), el; st.innerHTML='';
+  if(kind==='video'){ el=document.createElement('video'); el.src=src; el.autoplay=true; el.loop=true; el.playsInline=true; el.setAttribute('playsinline','');
+    el.play().catch(function(){ el.muted=true; el.play().catch(function(){}); }); }
+  else { el=new Image(); el.src=src; }
+  st.appendChild(el); $('sinfo').classList.add('hide');
+}
+
+/* фото/видео с телефона: файл на ntfy.sh (до 15 МБ) → экран получает ссылку; не вышло — фото кусками через MQTT */
+function prog(v){ var pr=$('prog'); pr.style.display=v==null?'none':'block'; pr.firstChild.style.width=(v||0)+'%'; }
+function downscale(file,max,q){ return new Promise(function(res,rej){
+  var img=new Image(), u=URL.createObjectURL(file);
+  img.onload=function(){ var k=Math.min(1,max/Math.max(img.width,img.height)), c=document.createElement('canvas');
+    c.width=Math.round(img.width*k); c.height=Math.round(img.height*k); c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    URL.revokeObjectURL(u); c.toBlob(function(b){ b?res(b):rej(); },'image/jpeg',q); };
+  img.onerror=function(){ URL.revokeObjectURL(u); rej(); }; img.src=u; }); }
+function pickFile(input){
+  var f=input.files&&input.files[0]; input.value=''; if(!f) return;
+  var kind=f.type.indexOf('video')===0?'video':'image';
+  (kind==='image'?downscale(f,1920,0.88).catch(function(){return f;}):Promise.resolve(f)).then(function(blob){
+    if(blob.size>15*1024*1024) return alert('Файл больше 15 МБ');
+    var id=uid(), x=new XMLHttpRequest(); prog(3);
+    x.open('PUT','https://ntfy.sh/'+topic());
+    x.setRequestHeader('Filename',id+(kind==='video'?'.mp4':'.jpg'));
+    x.setRequestHeader('Message',JSON.stringify({t:'m',kind:kind,i:id}));
+    x.upload.onprogress=function(e){ if(e.lengthComputable) prog(3+e.loaded/e.total*95); };
+    var fail=function(){ if(kind==='video'){ prog(null); return alert('Видео не отправилось (ntfy недоступен или лимит). Попробуйте позже.'); } chunks(f); };
+    x.onload=function(){ try{ var r=JSON.parse(x.responseText); if(x.status<300&&r.attachment){ send({t:'m',kind:kind,u:r.attachment.url,i:id},true); prog(100); setTimeout(function(){prog(null)},600); return; } }catch(e){} fail(); };
+    x.onerror=fail; x.send(blob);
+  });
+}
+function chunks(f){
+  downscale(f,1280,0.8).then(function(b){ var fr=new FileReader(); fr.onload=function(){
+    var s=fr.result.split(',')[1], CS=48000, n=Math.ceil(s.length/CS), id=uid(), k=0;
+    send({t:'fb',n:n,i:id},true);
+    (function next(){ if(k>=n){ prog(null); return; } mqttSend(JSON.stringify({t:'fc',f:id,k:k,d:s.substr(k*CS,CS)})); k++; prog(k/n*100); setTimeout(next,120); })();
+  }; fr.readAsDataURL(b); }).catch(function(){ prog(null); alert('Не удалось отправить фото'); });
 }
 
 (function(){ var m=(location.hash||'').match(/r=([A-Za-z0-9]{4,5})/); if(m){ goRemote(m[1].toUpperCase()); startRemote(); } })();
