@@ -1878,7 +1878,7 @@ class MainActivity : Activity() {
     }
 
     private val SHOW_MODES = listOf(
-        Triple("♫ саундпад", "Звуки и фото/видео на этом экране. Внутри — «Библиотека»: загрузка на GitHub по ключу администратора.", PAD_URL),
+        Triple("♫ саундпад", "Звуки и фото/видео. Добавить/удалить: «Библиотека» вверху страницы → ключ администратора. ⧉ ссылка · ↗ браузер · ⟳ обновить", PAD_URL),
         Triple("▣ экран·пульт", "На доске/ТВ откройте ссылку → «Экран», здесь → «Пульт» и введите код. Звуки, фото и видео — на большой экран.", SHOW_URL),
         Triple("♪ sound pad", "Чёрный экран на доске только для звуков: жмёте кнопки здесь — звук играет там.", SP_URL))
     private var showHint: TextView? = null
@@ -1896,6 +1896,20 @@ class MainActivity : Activity() {
             showMode = i; prefs.edit().putInt("show_mode", i).apply(); showHint?.text = SHOW_MODES[i].second; showWebLoad()
         }, LinearLayout.LayoutParams(-1, -2))
         showHint = text(SHOW_MODES[showMode].second, 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(6), dp(4), 0) }
+        // кнопки — сразу под режимами, чтобы не уезжали вниз за страницу
+        fun btn(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 13f else 15f) }
+        p.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(btn("[ ⛶ весь экран ]") { showFullWeb(showUrl(false)) }, LinearLayout.LayoutParams(0, dp(40), 2f))
+            addView(btn("[ ⧉ ]") {
+                val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("krisa37", showShareUrl()))
+                say("> ссылка скопирована: ${showShareUrl()}", ok = true)
+            }, LinearLayout.LayoutParams(0, dp(40), 0.7f).apply { leftMargin = dp(6) })
+            addView(btn("[ ↗ ]") { openExternal(android.net.Uri.parse(SHOW_MODES[showMode].third)) },
+                LinearLayout.LayoutParams(0, dp(40), 0.7f).apply { leftMargin = dp(6) })
+            addView(btn("[ ⟳ ]") { showReload() }, LinearLayout.LayoutParams(0, dp(40), 0.7f).apply { leftMargin = dp(6) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         p.addView(showHint)
 
         // окно страницы: тонкая полоска загрузки сверху и заглушка «нет связи»
@@ -1931,21 +1945,6 @@ class MainActivity : Activity() {
         val h = (resources.displayMetrics.heightPixels * 0.74f).toInt()
         p.addView(frame, LinearLayout.LayoutParams(-1, h).apply { topMargin = dp(8) })
 
-        fun btn(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 13f else 15f) }
-        p.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            addView(btn("[ ⛶ весь экран ]") { showFullWeb(showUrl(false)) }, LinearLayout.LayoutParams(0, dp(46), 2f))
-            addView(btn("[ ⧉ ]") {
-                val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                cm.setPrimaryClip(android.content.ClipData.newPlainText("krisa37", showShareUrl()))
-                say("> ссылка скопирована: ${showShareUrl()}", ok = true)
-            }, LinearLayout.LayoutParams(0, dp(46), 0.7f).apply { leftMargin = dp(6) })
-            addView(btn("[ ↗ ]") { openExternal(android.net.Uri.parse(SHOW_MODES[showMode].third)) },
-                LinearLayout.LayoutParams(0, dp(46), 0.7f).apply { leftMargin = dp(6) })
-            addView(btn("[ ⟳ ]") { showReload() }, LinearLayout.LayoutParams(0, dp(46), 0.7f).apply { leftMargin = dp(6) })
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
-        p.addView(text("⧉ — скопировать ссылку для доски/ТВ · ↗ — открыть в браузере · «Назад» листает страницу шоу", 11f, Term.DIM).apply {
-            typeface = Term.ru; setPadding(dp(4), dp(6), 0, 0) })
         return p
     }
 
