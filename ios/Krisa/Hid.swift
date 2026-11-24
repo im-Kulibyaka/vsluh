@@ -2778,6 +2778,19 @@ struct ShowTabPanel: View {
     @AppStorage("show_mode") private var mode = 0
     @State private var full = false
     @State private var reloadKey = 0
+    @State private var copied = false
+    static let titles: [String] = ["♫ саундпад", "▣ экран·пульт", "♪ sound pad"]
+    static let hints: [String] = [
+        "Звуки и фото/видео на этом экране. Внутри — «Библиотека»: загрузка на GitHub по ключу администратора.",
+        "На доске/ТВ откройте ссылку → «Экран», здесь → «Пульт» и введите код. Звуки, фото и видео — на большой экран.",
+        "Чёрный экран на доске только для звуков: жмёте кнопки здесь — звук играет там."
+    ]
+    private var pageUrl: String {
+        let base: String = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/"
+        return base + (mode == 1 ? "show/" : mode == 2 ? "sp/" : "pad/")
+    }
+    /// Для «экран·пульт» — короткая ссылка clck.ru, для остальных — полный адрес страницы.
+    private var shareUrl: String { mode == 1 ? "https://clck.ru/3XBmBy" : pageUrl }
     private func url(_ tr: Bool) -> String {
         let base: String = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/"
         let page: String = mode == 1 ? "show/" : mode == 2 ? "sp/" : "pad/"
@@ -2808,21 +2821,31 @@ struct ShowTabPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Button { mode = 0 } label: { TabLabel(title: "саундпад", on: mode == 0, height: 36, ruSize: 13, forceRu: true) }
-                Button { mode = 1 } label: { TabLabel(title: "экран·пульт", on: mode == 1, height: 36, ruSize: 13, forceRu: true) }
-                Button { mode = 2 } label: { TabLabel(title: "sound pad", on: mode == 2, height: 36, ruSize: 13, forceRu: true) }
+                ForEach(0..<3, id: \.self) { (i: Int) in
+                    Button { mode = i } label: { TabLabel(title: ShowTabPanel.titles[i], on: mode == i, height: 36, ruSize: 13, forceRu: true) }
+                }
             }
+            Text(ShowTabPanel.hints[min(max(mode, 0), 2)])
+                .font(Term.ru(12)).foregroundColor(Term.dim).fixedSize(horizontal: false, vertical: true)
             PadWeb(url: url(true), clear: true)
                 .id("\(url(true))-\(reloadKey)")
-                .frame(height: UIScreen.main.bounds.height * 0.72)
+                .frame(height: UIScreen.main.bounds.height * 0.68)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             HStack(spacing: 6) {
-                Button { full = true } label: { TabLabel(title: "⛶ на весь экран", on: false, height: 44, ruSize: 14, forceRu: true) }
-                Button { reloadKey += 1 } label: { TabLabel(title: "⟳", on: false, height: 44, ruSize: 14, forceRu: true) }
-                    .frame(width: 70)
+                Button { full = true } label: { TabLabel(title: "⛶ весь экран", on: false, height: 44, ruSize: 14, forceRu: true) }
+                Button {
+                    UIPasteboard.general.string = shareUrl
+                    copied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                } label: { TabLabel(title: copied ? "✓" : "⧉", on: copied, height: 44, ruSize: 16, forceRu: true) }
+                    .frame(width: 58)
+                Button { if let u = URL(string: pageUrl) { UIApplication.shared.open(u) } } label: { TabLabel(title: "↗", on: false, height: 44, ruSize: 16, forceRu: true) }
+                    .frame(width: 58)
+                Button { reloadKey += 1 } label: { TabLabel(title: "⟳", on: false, height: 44, ruSize: 16, forceRu: true) }
+                    .frame(width: 58)
             }
-            Text("«Саундпад» — звуки и фото/видео (вкладка «Библиотека» внутри — загрузка на GitHub по ключу администратора). «Экран·пульт» — чёрный экран на доске и пульт с телефона по коду комнаты. «Sound pad» — чёрный экран только для звуков.")
-                .font(Term.ru(12)).foregroundColor(Term.dim).fixedSize(horizontal: false, vertical: true)
+            Text("⧉ — скопировать ссылку для доски/ТВ · ↗ — открыть в Safari")
+                .font(Term.ru(11)).foregroundColor(Term.dim)
         }
         .fullScreenCover(isPresented: $full) {
             ZStack(alignment: .topTrailing) {

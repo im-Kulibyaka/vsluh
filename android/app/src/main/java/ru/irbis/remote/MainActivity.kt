@@ -1838,18 +1838,22 @@ class MainActivity : Activity() {
     }
 
     /** WebView со страницами шоу: JS, localStorage (токен), выбор файлов из галереи; наш сайт — внутри, прочее — в браузер. */
-    private fun makeShowWeb(): android.webkit.WebView = android.webkit.WebView(this).apply {
+    private fun makeShowWeb(onProg: ((Int) -> Unit)? = null, onErr: (() -> Unit)? = null): android.webkit.WebView = android.webkit.WebView(this).apply {
         setBackgroundColor(Color.BLACK)
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.mediaPlaybackRequiresUserGesture = false
         webChromeClient = object : android.webkit.WebChromeClient() {
+            override fun onProgressChanged(view: android.webkit.WebView?, p: Int) { onProg?.invoke(p) }
             override fun onShowFileChooser(wv: android.webkit.WebView?, cb: android.webkit.ValueCallback<Array<android.net.Uri>>?, params: FileChooserParams?): Boolean {
                 webFileCb?.onReceiveValue(null); webFileCb = cb
                 return try { startActivityForResult(params!!.createIntent(), REQ_FILE); true } catch (e: Exception) { webFileCb = null; false }
             }
         }
         webViewClient = object : android.webkit.WebViewClient() {
+            override fun onReceivedError(v: android.webkit.WebView?, r: android.webkit.WebResourceRequest?, e: android.webkit.WebResourceError?) {
+                if (r?.isForMainFrame == true) onErr?.invoke()
+            }
             override fun shouldOverrideUrlLoading(v: android.webkit.WebView, r: android.webkit.WebResourceRequest): Boolean {
                 val u = r.url
                 if (u.lastPathSegment?.startsWith("krisa37-show.") == true) { downloadFile(u); return true }   // файл-ссылка — скачать
@@ -1873,33 +1877,88 @@ class MainActivity : Activity() {
         } catch (e: Exception) { openExternal(u) }
     }
 
+    private val SHOW_MODES = listOf(
+        Triple("♫ саундпад", "Звуки и фото/видео на этом экране. Внутри — «Библиотека»: загрузка на GitHub по ключу администратора.", PAD_URL),
+        Triple("▣ экран·пульт", "На доске/ТВ откройте ссылку → «Экран», здесь → «Пульт» и введите код. Звуки, фото и видео — на большой экран.", SHOW_URL),
+        Triple("♪ sound pad", "Чёрный экран на доске только для звуков: жмёте кнопки здесь — звук играет там.", SP_URL))
+    private var showHint: TextView? = null
+    private var showErr: View? = null
+    private var showClearHist = false   // после смены режима «Назад» не должен возвращать на прошлый режим
+
+    /** Ссылка, которой удобно поделиться: для «экран·пульт» — короткая clck.ru, для остальных — полный адрес страницы. */
+    private fun showShareUrl() = if (showMode == 1) SHORT_URL else SHOW_MODES[showMode].third
+
     private fun buildShowPanel(): View {
         val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val prefs = getPreferences(MODE_PRIVATE)
         showMode = prefs.getInt("show_mode", 0).coerceIn(0, 2)
-        p.addView(chipRow(listOf("саундпад", "экран·пульт", "sound pad"), showMode) { i, _ ->
-            showMode = i; prefs.edit().putInt("show_mode", i).apply(); showWebLoad()
+        p.addView(chipRow(SHOW_MODES.map { it.first }, showMode) { i, _ ->
+            showMode = i; prefs.edit().putInt("show_mode", i).apply(); showHint?.text = SHOW_MODES[i].second; showWebLoad()
         }, LinearLayout.LayoutParams(-1, -2))
-        val web = makeShowWeb().apply {
+        showHint = text(SHOW_MODES[showMode].second, 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(6), dp(4), 0) }
+        p.addView(showHint)
+
+        // окно страницы: тонкая полоска загрузки сверху и заглушка «нет связи»
+        val frame = android.widget.FrameLayout(this)
+        val bar = android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100; progressTintList = android.content.res.ColorStateList.valueOf(Term.FG)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Color.TRANSPARENT) }
+        val err = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; visibility = View.GONE
+            setBackgroundColor(Color.argb(200, 0, 0, 0))
+            addView(text("нет связи с сайтом", 18f, Term.FG).apply { typeface = Term.ru; gravity = Gravity.CENTER })
+            addView(text("проверьте интернет и нажмите ⟳", 13f, Term.DIM).apply { typeface = Term.ru; gravity = Gravity.CENTER; setPadding(0, dp(6), 0, dp(12)) })
+            addView(mocButton("[ ⟳ повторить ]") { showReload() }.apply { typeface = Term.ru }, LinearLayout.LayoutParams(dp(200), dp(46)))
+        }
+        showErr = err
+        val web = makeShowWeb(
+            onProg = { v -> bar.progress = v; bar.visibility = if (v >= 100) View.INVISIBLE else View.VISIBLE
+                if (v >= 100 && showClearHist) { showClearHist = false; showWeb?.clearHistory() } },
+            onErr = { err.visibility = View.VISIBLE }
+        ).apply {
             setBackgroundColor(Color.TRANSPARENT)   // сквозь страницу виден фон темы (лог, «Матрица», призма, чертёж)
             // страница прокручивается внутри, а не вся вкладка
             setOnTouchListener { v, _ -> v.parent?.requestDisallowInterceptTouchEvent(true); false }
         }
         showWeb = web
-        val h = (resources.displayMetrics.heightPixels * 0.78f).toInt()
-        p.addView(web, LinearLayout.LayoutParams(-1, h).apply { topMargin = dp(8) })
+        frame.addView(web, android.widget.FrameLayout.LayoutParams(-1, -1))
+        frame.addView(bar, android.widget.FrameLayout.LayoutParams(-1, dp(3)))
+        frame.addView(err, android.widget.FrameLayout.LayoutParams(-1, -1))
+        frame.clipToOutline = true
+        frame.outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(v: View, o: android.graphics.Outline) { o.setRoundRect(0, 0, v.width, v.height, dp(10).toFloat()) }
+        }
+        val h = (resources.displayMetrics.heightPixels * 0.74f).toInt()
+        p.addView(frame, LinearLayout.LayoutParams(-1, h).apply { topMargin = dp(8) })
+
         fun btn(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 13f else 15f) }
         p.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(btn("[ ⛶ на весь экран ]") { showFullWeb(showUrl(false)) }, LinearLayout.LayoutParams(0, dp(46), 1.4f))
-            addView(btn("[ ⟳ ]") { showWeb?.reload() }, LinearLayout.LayoutParams(0, dp(46), 0.6f).apply { leftMargin = dp(6) })
+            addView(btn("[ ⛶ весь экран ]") { showFullWeb(showUrl(false)) }, LinearLayout.LayoutParams(0, dp(46), 2f))
+            addView(btn("[ ⧉ ]") {
+                val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("krisa37", showShareUrl()))
+                say("> ссылка скопирована: ${showShareUrl()}", ok = true)
+            }, LinearLayout.LayoutParams(0, dp(46), 0.7f).apply { leftMargin = dp(6) })
+            addView(btn("[ ↗ ]") { openExternal(android.net.Uri.parse(SHOW_MODES[showMode].third)) },
+                LinearLayout.LayoutParams(0, dp(46), 0.7f).apply { leftMargin = dp(6) })
+            addView(btn("[ ⟳ ]") { showReload() }, LinearLayout.LayoutParams(0, dp(46), 0.7f).apply { leftMargin = dp(6) })
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
-        p.addView(text("«Саундпад» — звуки и фото/видео (вкладка «Библиотека» внутри — загрузка на GitHub по ключу администратора). «Экран·пульт» — чёрный экран на доске и пульт с телефона по коду комнаты.", 12f, Term.DIM).apply {
+        p.addView(text("⧉ — скопировать ссылку для доски/ТВ · ↗ — открыть в браузере · «Назад» листает страницу шоу", 11f, Term.DIM).apply {
             typeface = Term.ru; setPadding(dp(4), dp(6), 0, 0) })
         return p
     }
 
-    private fun showWebLoad() { val w = showWeb ?: return; if (showLoaded != showMode) { showLoaded = showMode; w.loadUrl(showUrl()) } }
+    private fun showReload() { showErr?.visibility = View.GONE; showLoaded = -1; showWebLoad() }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        val w = showWeb
+        if (w != null && ::showPanel.isInitialized && showPanel.isShown && w.canGoBack()) { w.goBack(); return }
+        @Suppress("DEPRECATION") super.onBackPressed()
+    }
+
+    private fun showWebLoad() { val w = showWeb ?: return; if (showLoaded != showMode) { showLoaded = showMode; showErr?.visibility = View.GONE; showClearHist = true; w.loadUrl(showUrl()) } }
 
     /** Та же страница шоу на весь экран (для доски/ТВ). */
     private fun showFullWeb(url: String) {
