@@ -2781,7 +2781,7 @@ struct ShowTabPanel: View {
     @State private var copied = false
     static let titles: [String] = ["♫ саундпад", "▣ экран·пульт", "♪ sound pad"]
     static let hints: [String] = [
-        "Звуки и фото/видео на этом экране. Внутри — «Библиотека»: загрузка на GitHub по ключу администратора.",
+        "Звуки и фото/видео. Добавить/удалить: «Библиотека» вверху страницы → ключ администратора. ⧉ ссылка · ↗ Safari · ⟳ обновить",
         "На доске/ТВ откройте ссылку → «Экран», здесь → «Пульт» и введите код. Звуки, фото и видео — на большой экран.",
         "Чёрный экран на доске только для звуков: жмёте кнопки здесь — звук играет там."
     ]
@@ -2827,25 +2827,23 @@ struct ShowTabPanel: View {
             }
             Text(ShowTabPanel.hints[min(max(mode, 0), 2)])
                 .font(Term.ru(12)).foregroundColor(Term.dim).fixedSize(horizontal: false, vertical: true)
-            PadWeb(url: url(true), clear: true)
-                .id("\(url(true))-\(reloadKey)")
-                .frame(height: UIScreen.main.bounds.height * 0.68)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
             HStack(spacing: 6) {
-                Button { full = true } label: { TabLabel(title: "⛶ весь экран", on: false, height: 44, ruSize: 14, forceRu: true) }
+                Button { full = true } label: { TabLabel(title: "⛶ весь экран", on: false, height: 40, ruSize: 14, forceRu: true) }
                 Button {
                     UIPasteboard.general.string = shareUrl
                     copied = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
-                } label: { TabLabel(title: copied ? "✓" : "⧉", on: copied, height: 44, ruSize: 16, forceRu: true) }
+                } label: { TabLabel(title: copied ? "✓" : "⧉", on: copied, height: 40, ruSize: 16, forceRu: true) }
                     .frame(width: 58)
-                Button { if let u = URL(string: pageUrl) { UIApplication.shared.open(u) } } label: { TabLabel(title: "↗", on: false, height: 44, ruSize: 16, forceRu: true) }
+                Button { if let u = URL(string: pageUrl) { UIApplication.shared.open(u) } } label: { TabLabel(title: "↗", on: false, height: 40, ruSize: 16, forceRu: true) }
                     .frame(width: 58)
-                Button { reloadKey += 1 } label: { TabLabel(title: "⟳", on: false, height: 44, ruSize: 16, forceRu: true) }
+                Button { reloadKey += 1 } label: { TabLabel(title: "⟳", on: false, height: 40, ruSize: 16, forceRu: true) }
                     .frame(width: 58)
             }
-            Text("⧉ — скопировать ссылку для доски/ТВ · ↗ — открыть в Safari")
-                .font(Term.ru(11)).foregroundColor(Term.dim)
+            PadWeb(url: url(true), clear: true)
+                .id("\(url(true))-\(reloadKey)")
+                .frame(height: UIScreen.main.bounds.height * 0.68)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .fullScreenCover(isPresented: $full) {
             ZStack(alignment: .topTrailing) {

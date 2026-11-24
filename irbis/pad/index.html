@@ -64,7 +64,7 @@ label.file input{display:none}
   <!-- БИБЛИОТЕКА -->
   <div id="lib" style="display:none">
     <div class="card" id="libGate">
-      <div class="dim">Добавлять файлы может только администратор. Введите ключ:</div>
+      <div class="dim">Добавлять и удалять файлы может только администратор. Введите ключ:</div>
       <input id="adminKey" type="password" placeholder="ключ администратора" onkeydown="if(event.key==='Enter')adminLogin()">
       <button class="big" onclick="adminLogin()">Войти</button>
       <div class="st" id="gatest"></div>
@@ -91,6 +91,11 @@ label.file input{display:none}
         <input id="mFile" type="file" accept="image/*,video/*" onchange="pickLbl(this,'mFileLbl','🖼 ')"></label>
       <button class="big" onclick="addMedia()">Загрузить на GitHub</button>
     </div>
+    <div class="card">
+      <div class="row" style="align-items:center;margin-bottom:6px"><div class="dim">Удалить из библиотеки</div>
+        <button class="ghost" style="flex:0 0 auto;padding:6px 12px" onclick="refresh()">⟳</button></div>
+      <div id="delList"></div>
+    </div>
     <div id="prog"><i></i></div>
     <div class="st" id="libst"></div>
     <p class="dim" style="font-size:12px">После загрузки сайт обновляется не сразу — GitHub Pages пересобирается ~30–120 с. Потом нажмите «Обновить» на вкладке «Показ». Крупное видео загружать не стоит (ограничение GitHub и размер репозитория).</p>
@@ -109,7 +114,7 @@ var ADMIN_HASH='2acf2854000db3d734ccd4e8e14b99d3fa795e82030231d4f00e7ba6219e48dc
 function tab(t){ $('show').style.display=t==='show'?'':'none'; $('lib').style.display=t==='lib'?'':'none';
   $('tShow').className='tab'+(t==='show'?' on':''); $('tLib').className='tab'+(t==='lib'?' on':''); if(t==='lib') unlockLib(isAdmin()); }
 function isAdmin(){ try{return localStorage.getItem('krisa37.admin')==='1'}catch(e){return false} }
-function unlockLib(on){ $('libGate').style.display=on?'none':''; $('libInner').style.display=on?'':'none'; if(on){ $('tokst').textContent=token()?'токен сохранён':'токен не задан'; } }
+function unlockLib(on){ $('libGate').style.display=on?'none':''; $('libInner').style.display=on?'':'none'; if(on){ renderDel(); $('tokst').textContent=token()?'токен сохранён':'токен не задан'; } }
 function adminLogout(){ try{localStorage.removeItem('krisa37.admin')}catch(e){} unlockLib(false); }
 async function sha256hex(s){ var b=new TextEncoder().encode(s); var h=await crypto.subtle.digest('SHA-256',b); return Array.from(new Uint8Array(h)).map(function(x){return x.toString(16).padStart(2,'0')}).join(''); }
 async function adminLogin(){ try{ var h=await sha256hex($('adminKey').value); if(h===ADMIN_HASH){ try{localStorage.setItem('krisa37.admin','1')}catch(e){} $('adminKey').value=''; $('gatest').textContent=''; unlockLib(true); } else { $('gatest').textContent='Неверный ключ'; $('gatest').className='st warn'; } }catch(e){ $('gatest').textContent='Ошибка: '+e.message; $('gatest').className='st warn'; } }
@@ -125,6 +130,7 @@ function render(){
     var th= m.kind==='video' ? document.createElement('video') : document.createElement('img'); th.src='files/'+m.p; if(m.kind==='video'){th.muted=true;}
     var cap=document.createElement('div'); cap.className='cap'; cap.textContent=m.n;
     it.appendChild(th); it.appendChild(cap); it.onclick=function(){ showMedia('files/'+m.p, m.kind); }; gal.appendChild(it); });
+  renderDel();
   if(!(lib.media||[]).length){ var d2=document.createElement('div'); d2.className='dim'; d2.style.cssText='grid-column:1/-1;font-size:13px'; d2.textContent='Пусто. Добавьте фото/видео во вкладке «Библиотека».'; gal.appendChild(d2); }
 }
 function playSound(u){ try{ var a=new Audio(u); a.play().catch(function(){window.open(u,'_blank')}); audios.push(a); }catch(e){} }
@@ -152,6 +158,32 @@ async function updateLib(mut){ var cur=await ghGet(DIR+'/lib.json'); var data={s
   if(cur&&cur.content){ try{ data=JSON.parse(decodeURIComponent(escape(atob(cur.content.replace(/\n/g,''))))); }catch(e){} }
   mut(data); await ghPut(DIR+'/lib.json', utf8b64(JSON.stringify(data)), 'show library update'); }
 function setLibSt(t,err){ $('libst').textContent=t; $('libst').className='st'+(err?' warn':''); }
+/* список с кнопками 🗑: убрать из lib.json и удалить свой файл с GitHub */
+function renderDel(){
+  var box=$('delList'); if(!box) return; box.innerHTML='';
+  var rows=[]; (lib.sounds||[]).forEach(function(x){ rows.push({k:'sounds',x:x,ic:'🎵'}); }); (lib.media||[]).forEach(function(x){ rows.push({k:'media',x:x,ic:x.kind==='video'?'🎬':'🖼'}); });
+  if(!rows.length){ box.innerHTML='<div class="dim" style="font-size:13px">Библиотека пуста</div>'; return; }
+  rows.forEach(function(r){ var d=document.createElement('div'); d.className='row'; d.style.cssText='align-items:center;margin:6px 0';
+    var t=document.createElement('div'); t.style.cssText='flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'; t.textContent=r.ic+' '+r.x.n;
+    var b=document.createElement('button'); b.className='ghost'; b.style.cssText='flex:0 0 auto;padding:8px 14px'; b.textContent='🗑';
+    b.onclick=function(){ delItem(r.k,r.x,b); }; d.appendChild(t); d.appendChild(b); box.appendChild(d); });
+}
+async function delItem(kind,item,btn){
+  if(!token()) return setLibSt('Сначала сохраните GitHub-токен',1);
+  if(!confirm('Удалить «'+item.n+'» из библиотеки?')) return;
+  var file=item.f||item.p; btn.disabled=true; setLibSt('Удаление…');
+  try{
+    var same=function(a){ return a.n===item.n && (a.u||'')===(item.u||'') && (a.f||'')===(item.f||'') && (a.p||'')===(item.p||''); };
+    var still=false;
+    await updateLib(function(d){ var arr=d[kind]||[], i=arr.findIndex(same); if(i>=0) arr.splice(i,1);
+      still=!!file && (d.sounds||[]).concat(d.media||[]).some(function(a){ return (a.f||a.p)===file; }); });
+    if(file && !still){ var ex=await ghGet(DIR+'/files/'+file);
+      if(ex&&ex.sha){ var r=await fetch(API+DIR+'/files/'+file,{method:'DELETE',headers:H(),body:JSON.stringify({message:'delete '+file,sha:ex.sha,branch:'main'})});
+        if(!r.ok) throw new Error('GitHub '+r.status); } }
+    lib[kind]=(lib[kind]||[]).filter(function(a){ return !same(a); }); render();
+    setLibSt('Удалено. На сайте пропадёт через ~1 мин.');
+  }catch(e){ btn.disabled=false; setLibSt('Ошибка: '+e.message,1); }
+}
 async function addSound(){
   if(!token()) return setLibSt('Сначала сохраните GitHub-токен',1);
   var name=$('sName').value.trim(); if(!name) return setLibSt('Введите название',1);
