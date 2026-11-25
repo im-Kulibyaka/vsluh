@@ -58,7 +58,7 @@ label.file input{display:none}
       <button class="ghost" style="margin-top:8px" onclick="stopAll()">⏹ Остановить звук</button></div>
     <div class="card"><div class="dim" style="margin-bottom:8px">Фото и видео</div>
       <div class="gal" id="gal"></div></div>
-    <p class="dim" style="font-size:13px">Нажмите на кнопку — звук/фото/видео появится на весь экран (на этом же устройстве; на доске откройте страницу прямо на ней). Один раз коснитесь экрана и поднимите громкость для звука.</p>
+    <p class="dim" style="font-size:13px">Нажмите на кнопку — звук/фото/видео появится поверх страницы (на этом же устройстве; на доске откройте страницу прямо на ней). Один раз коснитесь экрана и поднимите громкость для звука.</p>
   </div>
 
   <!-- БИБЛИОТЕКА -->
@@ -138,7 +138,7 @@ function stopAll(){ audios.forEach(function(a){try{a.pause()}catch(e){}}); audio
 function showMedia(src,kind){ var st=$('fstage'); st.innerHTML=''; if(curUrl){URL.revokeObjectURL(curUrl);curUrl=null;}
   var el= kind==='video' ? document.createElement('video') : document.createElement('img'); el.src=src;
   if(kind==='video'){ el.autoplay=true; el.loop=true; el.playsInline=true; el.setAttribute('playsinline',''); el.play&&el.play().catch(function(){}); }
-  st.appendChild(el); $('full').style.display='flex'; try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}catch(e){} }
+  st.appendChild(el); $('full').style.display='flex'; }
 function closeFull(){ $('full').style.display='none'; $('fstage').innerHTML=''; if(curUrl){URL.revokeObjectURL(curUrl);curUrl=null;} }
 function localShow(input){ var f=input.files&&input.files[0]; input.value=''; if(!f)return; curUrl=URL.createObjectURL(f); showMedia(curUrl, f.type.indexOf('video')===0?'video':'image'); }
 
