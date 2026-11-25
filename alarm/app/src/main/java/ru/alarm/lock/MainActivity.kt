@@ -49,7 +49,7 @@ class MainActivity : Activity() {
             setTextColor(Color.WHITE)
             setOnClickListener { onToggle() }
         }
-        val hint = TextView(this).apply {
+        val infoText = TextView(this).apply {
             text = "Когда сигнализация включена, при включении экрана телефона появится " +
                 "красное окно и зазвучит громкая сирена. Сигнал можно отключить паролем " +
                 "(или одной кнопкой в режиме без пароля); после этого сигнализацию нужно включить здесь снова."
@@ -111,7 +111,7 @@ class MainActivity : Activity() {
             setPadding(dp(24), dp(24), dp(24), dp(24))
             addView(status)
             addView(toggle, LinearLayout.LayoutParams(match, dp(120)).apply { topMargin = dp(24) })
-            addView(hint, LinearLayout.LayoutParams(match, wrap).apply { topMargin = dp(16) })
+            addView(infoText, LinearLayout.LayoutParams(match, wrap).apply { topMargin = dp(16) })
             addView(settingsHeader)
             addView(label("Пароль для отключения"))
             addView(passwordField, LinearLayout.LayoutParams(match, wrap))
