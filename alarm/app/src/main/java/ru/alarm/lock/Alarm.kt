@@ -10,18 +10,46 @@ import android.view.KeyEvent
 import kotlin.math.PI
 import kotlin.math.sin
 
-/** Пароль, которым отключается сигнализация. */
-const val ALARM_PASSWORD = "88006553535"
+/** Пароль по умолчанию, которым отключается сигнализация. */
+const val DEFAULT_PASSWORD = "88006553535"
+const val MAX_PASSWORD_LENGTH = 32
+const val MAX_DELAY_SECONDS = 300
 
 private const val PREFS = "alarm"
 private const val KEY_ENABLED = "enabled"
+private const val KEY_PASSWORD = "password"
+private const val KEY_DELAY = "delay"
+private const val KEY_NO_PASSWORD = "no_password"
+
+private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
 /** Включена ли сигнализация (переключается кнопкой в приложении). */
-fun isAlarmEnabled(context: Context): Boolean =
-    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ENABLED, false)
+fun isAlarmEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ENABLED, false)
 
 fun setAlarmEnabled(context: Context, enabled: Boolean) {
-    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_ENABLED, enabled).apply()
+    prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
+}
+
+/** Пароль для отключения. */
+fun alarmPassword(context: Context): String =
+    prefs(context).getString(KEY_PASSWORD, DEFAULT_PASSWORD) ?: DEFAULT_PASSWORD
+
+fun setAlarmPassword(context: Context, password: String) {
+    prefs(context).edit().putString(KEY_PASSWORD, password).apply()
+}
+
+/** Задержка в секундах от включения экрана до срабатывания (0 — сразу). */
+fun alarmDelaySeconds(context: Context): Int = prefs(context).getInt(KEY_DELAY, 0)
+
+fun setAlarmDelaySeconds(context: Context, seconds: Int) {
+    prefs(context).edit().putInt(KEY_DELAY, seconds).apply()
+}
+
+/** Режим без пароля: окно отключается одной кнопкой. */
+fun alarmNoPassword(context: Context): Boolean = prefs(context).getBoolean(KEY_NO_PASSWORD, false)
+
+fun setAlarmNoPassword(context: Context, enabled: Boolean) {
+    prefs(context).edit().putBoolean(KEY_NO_PASSWORD, enabled).apply()
 }
 
 fun Context.dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()

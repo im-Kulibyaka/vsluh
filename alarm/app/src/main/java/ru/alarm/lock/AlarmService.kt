@@ -11,7 +11,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 
 /**
  * Работает в фоне, пока сигнализация включена. При включении экрана
@@ -20,6 +22,12 @@ import android.os.IBinder
 class AlarmService : Service() {
 
     private val sound by lazy { AlarmSound(this) }
+    private val handler = Handler(Looper.getMainLooper())
+    private var pendingFire = false
+    private val fireAlarm = Runnable {
+        pendingFire = false
+        raiseAlarm()
+    }
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -49,6 +57,8 @@ class AlarmService : Service() {
         if (intent?.action == ACTION_UNLOCK) {
             // Пароль введён: сигнал выключается, сигнализацию нужно включить заново в приложении.
             setAlarmEnabled(this, false)
+            handler.removeCallbacks(fireAlarm)
+            pendingFire = false
             sound.stop()
             getSystemService(NotificationManager::class.java).cancel(NOTIF_ALARM)
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -63,6 +73,18 @@ class AlarmService : Service() {
     }
 
     private fun onScreenOn() {
+        if (!isAlarmEnabled(this)) return
+        val delay = alarmDelaySeconds(this)
+        if (delay <= 0) {
+            raiseAlarm()
+        } else if (!pendingFire) {
+            // Таймер: сигнал сработает через заданное время после включения экрана.
+            pendingFire = true
+            handler.postDelayed(fireAlarm, delay * 1000L)
+        }
+    }
+
+    private fun raiseAlarm() {
         if (!isAlarmEnabled(this)) return
         sound.start()
         showLockWindow()
@@ -113,6 +135,7 @@ class AlarmService : Service() {
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(screenReceiver) }
+        handler.removeCallbacks(fireAlarm)
         sound.stop()
         super.onDestroy()
     }

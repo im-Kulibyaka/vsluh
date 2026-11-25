@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
@@ -13,7 +14,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 
-/** Красное окно с паролем поверх экрана блокировки. */
+/** Красное окно поверх экрана блокировки: с паролем или одной кнопкой (режим без пароля). */
 class LockActivity : Activity() {
 
     private lateinit var input: EditText
@@ -26,6 +27,7 @@ class LockActivity : Activity() {
                 WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
                 WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
         )
+        val noPassword = alarmNoPassword(this)
 
         val title = TextView(this).apply {
             text = "⚠ СИГНАЛИЗАЦИЯ"
@@ -34,14 +36,14 @@ class LockActivity : Activity() {
             gravity = Gravity.CENTER
         }
         val subtitle = TextView(this).apply {
-            text = "Введите пароль, чтобы отключить"
+            text = if (noPassword) "Нажмите, чтобы отключить" else "Введите пароль, чтобы отключить"
             textSize = 18f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
         }
         input = EditText(this).apply {
             hint = "Пароль"
-            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             imeOptions = EditorInfo.IME_ACTION_DONE
             textSize = 24f
             gravity = Gravity.CENTER
@@ -53,6 +55,7 @@ class LockActivity : Activity() {
                 if (actionId == EditorInfo.IME_ACTION_DONE) check()
                 true
             }
+            visibility = if (noPassword) View.GONE else View.VISIBLE
         }
         error = TextView(this).apply {
             textSize = 16f
@@ -80,7 +83,7 @@ class LockActivity : Activity() {
     }
 
     private fun check() {
-        if (input.text.toString().trim() == ALARM_PASSWORD) {
+        if (alarmNoPassword(this) || input.text.toString().trim() == alarmPassword(this)) {
             startService(Intent(this, AlarmService::class.java).setAction(AlarmService.ACTION_UNLOCK))
             finish()
         } else {
@@ -89,7 +92,7 @@ class LockActivity : Activity() {
         }
     }
 
-    // Кнопка «Назад» не закрывает окно: сигнализацию можно отключить только паролем.
+    // Кнопка «Назад» не закрывает окно: сигнализацию можно отключить только паролем (или кнопкой в режиме без пароля).
     @Suppress("DEPRECATION")
     override fun onBackPressed() {}
 
