@@ -52,7 +52,7 @@ label.file input{display:none}
     <div id="code">·····</div>
     <div id="qr"></div>
     <div class="st" id="sst" style="margin-top:8px"></div>
-    <div class="dim" style="font-size:13px;margin-top:6px">нажмите на экран один раз — чтобы браузер разрешил звук и развернул на весь экран</div>
+    <div class="dim" style="font-size:13px;margin-top:6px">нажмите на экран один раз — чтобы браузер разрешил звук</div>
   </div>
   <div id="now"></div>
 </div>
@@ -145,7 +145,6 @@ function goScreen(){
   var info=$('sinfo'), t;
   $('screen').addEventListener('click',function(){
     try{ var a=new Audio(); a.muted=true; a.play().catch(function(){}); }catch(e){}   // разрешение звука
-    try{ document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen(); }catch(e){}
     info.classList.remove('hide'); clearTimeout(t); t=setTimeout(function(){info.classList.add('hide')},5000);
   });
 }

@@ -96,7 +96,7 @@
     <div class="dim">наведите камеру на QR — или откройте «Шоу» в приложении и введите код</div>
     <div class="status dim" id="scrStatus">запуск…</div>
   </div>
-  <div id="tapHint">нажмите, чтобы развернуть на весь экран</div>
+  <div id="tapHint">нажмите на экран один раз — чтобы браузер разрешил звук</div>
 </div>
 
 <!-- ПУЛЬТ -->
@@ -187,7 +187,7 @@ function send(o,noNtfy){
 function goScreen(){
   role='screen'; CODE=randCode();
   $('#home').style.display='none'; $('#screen').style.display='block';
-  unlockAudio(); document.documentElement.requestFullscreen?.().catch(()=>{});
+  unlockAudio();
   $('#code').textContent=CODE;
   const url=location.origin+location.pathname+'#remote='+CODE;
   try{ new QRCode($('#qr'),{text:url,width:128,height:128,colorDark:'#04140a',colorLight:'#ffffff'}); }catch(e){}
@@ -195,7 +195,7 @@ function goScreen(){
   const info=$('#scrInfo'), hide=()=>info.classList.add('hide');
   let t=setTimeout(hide,8000);
   $('#screen').addEventListener('click',()=>{
-    unlockAudio(); document.documentElement.requestFullscreen?.().catch(()=>{});
+    unlockAudio();
     info.classList.remove('hide'); clearTimeout(t); t=setTimeout(hide,6000);
     $('#tapHint').style.display='none';
   });
