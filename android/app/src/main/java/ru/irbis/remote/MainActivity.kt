@@ -50,14 +50,22 @@ class MainActivity : Activity() {
     /** Номер нажатия, кнопка которого сейчас зажата; 0 — ничего не зажато. */
     @Volatile private var held = 0
 
+    /** До Android 13 флага NOT_EXPORTED нет; подделка интента безвредна — доступ проверяется через UsbManager.hasPermission. */
+    @android.annotation.SuppressLint("UnspecifiedRegisterReceiverFlag")
+    private fun registerUsbReceiver(f: android.content.IntentFilter) {
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbReceiver, f, RECEIVER_NOT_EXPORTED) else registerReceiver(usbReceiver, f)
+    }
+
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             val d = i.usbDevice() ?: return
+            // доступ проверяем у системы, а не по полю интента: до Android 13 приёмник открыт и интент можно подделать
+            val granted = runCatching { (getSystemService(USB_SERVICE) as UsbManager).hasPermission(d) }.getOrDefault(false)
             when (i.action) {
                 ACTION_PERMISSION ->
-                    if (i.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) connect(d)
+                    if (granted) connect(d)
                     else say("Нет доступа к USB-передатчику", err = true)
-                ACTION_FLASH_PERM -> { val cb = onFlashPerm; onFlashPerm = null; cb?.invoke(i.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false), d) }
+                ACTION_FLASH_PERM -> { val cb = onFlashPerm; onFlashPerm = null; cb?.invoke(granted, d) }
                 UsbManager.ACTION_USB_DEVICE_ATTACHED -> { findUsb(null); ui.postDelayed({ renderMode() }, 1000) }
                 UsbManager.ACTION_USB_DEVICE_DETACHED -> {
                     if (d.deviceName == usbIrDevice) {
@@ -92,7 +100,7 @@ class MainActivity : Activity() {
         if (Term.blueprint || Term.prism) paintBars()   // окно уже создано — можно менять цвет строки состояния
 
         val f = IntentFilter().apply { addAction(ACTION_PERMISSION); addAction(ACTION_FLASH_PERM); addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED); addAction(UsbManager.ACTION_USB_DEVICE_DETACHED) }
-        if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbReceiver, f, RECEIVER_NOT_EXPORTED) else registerReceiver(usbReceiver, f)
+        registerUsbReceiver(f)
 
         findUsb(intent)
         renderMode()
@@ -1382,7 +1390,7 @@ class MainActivity : Activity() {
         val l = hidLink()
         if (!l.bluetoothOn) {
             say("> включите Bluetooth и нажмите «подключить» ещё раз")
-            runCatching { @Suppress("DEPRECATION") startActivity(Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_ENABLE)) }
+            runCatching { @Suppress("DEPRECATION", "MissingPermission") startActivity(Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_ENABLE)) }
             return
         }
         l.connect()
