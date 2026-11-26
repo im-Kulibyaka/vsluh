@@ -133,7 +133,7 @@ function render(){
   renderDel();
   if(!(lib.media||[]).length){ var d2=document.createElement('div'); d2.className='dim'; d2.style.cssText='grid-column:1/-1;font-size:13px'; d2.textContent='Пусто. Добавьте фото/видео во вкладке «Библиотека».'; gal.appendChild(d2); }
 }
-function playSound(u){ try{ var a=new Audio(u); a.play().catch(function(){window.open(u,'_blank')}); audios.push(a); }catch(e){} }
+function playSound(u){ try{ var a=new Audio(u); a.play().catch(function(){ if(/^https?:\/\//i.test(u)) window.open(u,'_blank'); }); audios.push(a); }catch(e){} }
 function stopAll(){ audios.forEach(function(a){try{a.pause()}catch(e){}}); audios=[]; }
 function showMedia(src,kind){ var st=$('fstage'); st.innerHTML=''; if(curUrl){URL.revokeObjectURL(curUrl);curUrl=null;}
   var el= kind==='video' ? document.createElement('video') : document.createElement('img'); el.src=src;
@@ -189,6 +189,8 @@ async function addSound(){
   var name=$('sName').value.trim(); if(!name) return setLibSt('Введите название',1);
   var url=$('sUrl').value.trim(), f=$('sFile').files&&$('sFile').files[0];
   try{
+    if(url && !/^https:\/\//i.test(url)) return setLibSt('Ссылка должна начинаться с https://',1);
+    if(url && /myinstants\.com\/(\w+\/)?instant\//i.test(url)) return setLibSt('Это ссылка на страницу Myinstants, а нужна ссылка на сам .mp3: на странице звука нажмите «Скачать» и скопируйте адрес файла (…/media/sounds/….mp3) — или скачайте mp3 и выберите файл.',1);
     if(url){ await updateLib(function(d){ d.sounds.push({n:name.slice(0,24),u:url}); }); }
     else if(f){ setLibSt('Загрузка…'); progress(f,0); var fn='s_'+Date.now()+'_'+safe(f.name);
       await ghPut(DIR+'/files/'+fn, b64(await f.arrayBuffer()), 'add sound '+fn);

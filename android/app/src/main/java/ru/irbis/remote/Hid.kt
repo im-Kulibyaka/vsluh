@@ -177,7 +177,7 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
     private fun write(ch: BluetoothGattCharacteristic, v: ByteArray, withResponse: Boolean): Boolean {
         val g = gatt ?: return false
         val type = if (withResponse) BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT else BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-        return if (Build.VERSION.SDK_INT >= 33) g.writeCharacteristic(ch, v, type) == BluetoothGatt.GATT_SUCCESS
+        return if (Build.VERSION.SDK_INT >= 33) g.writeCharacteristic(ch, v, type) == android.bluetooth.BluetoothStatusCodes.SUCCESS
         else { ch.writeType = type; ch.value = v; g.writeCharacteristic(ch) }
     }
 
@@ -215,7 +215,7 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
                 g.setCharacteristicNotification(info, true)
                 info.getDescriptor(CCCD)?.let { d ->
                     enqueue {
-                        if (Build.VERSION.SDK_INT >= 33) g.writeDescriptor(d, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) == BluetoothGatt.GATT_SUCCESS
+                        if (Build.VERSION.SDK_INT >= 33) g.writeDescriptor(d, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) == android.bluetooth.BluetoothStatusCodes.SUCCESS
                         else { d.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE; g.writeDescriptor(d) }
                     }
                 }
