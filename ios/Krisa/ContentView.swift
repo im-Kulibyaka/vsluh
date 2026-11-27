@@ -751,7 +751,7 @@ struct PadWeb: UIViewRepresentable {
             if let u = action.request.url, u.lastPathComponent.hasPrefix("krisa37-show.") {
                 PadWeb.saveFile(u); decisionHandler(.cancel); return            // файл-ссылка — сохранить
             }
-            if let u = action.request.url, ["http", "https"].contains(u.scheme ?? ""), u.host != "mikhailkulinskii1910-jpg.github.io" {
+            if let u = action.request.url, ["http", "https"].contains(u.scheme ?? ""), u.host != "im-kulibyaka.github.io" {
                 UIApplication.shared.open(u); decisionHandler(.cancel); return
             }
             decisionHandler(.allow)

@@ -753,7 +753,7 @@ pako/dist/pako.esm.mjs:
       html = `<div class="notice"><p>Web Serial недоступен, но есть WebUSB. Так работают платы с чипом CH340, например через Chrome на Android с OTG-переходником. Чип CH343 через WebUSB не поддерживается.</p></div>`;
     }
     if (isAndroid) {
-      html += `<div class="notice"><p><b>На телефоне удобнее приложение.</b> Оно работает с любым USB-чипом платы, а не только с CH340. <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/esp32-flasher/ESP32-Flasher.apk">Скачать ESP32 Flasher для Android (.apk)</a></p></div>`;
+      html += `<div class="notice"><p><b>На телефоне удобнее приложение.</b> Оно работает с любым USB-чипом платы, а не только с CH340. <a href="https://im-kulibyaka.github.io/vsluh/esp32-flasher/ESP32-Flasher.apk">Скачать ESP32 Flasher для Android (.apk)</a></p></div>`;
     }
     if (html) { n.innerHTML = html; n.hidden = false; }
     $("#btnSerial").disabled = !serialOk;
@@ -1124,7 +1124,7 @@ pako/dist/pako.esm.mjs:
   // ---------- Готовые прошивки (работают, когда страница открыта с GitHub Pages) ----------
   // ---------- Каталог готовых прошивок ----------
   // В приложении каталог берётся с сайта (там самые новые прошивки), без интернета — встроенный.
-  const SITE = "https://mikhailkulinskii1910-jpg.github.io/vsluh/esp32-flasher/";
+  const SITE = "https://im-kulibyaka.github.io/vsluh/esp32-flasher/";
   const App = window.AndroidApp;
   let catalog = [], catBase = "", catFilter = "", filterTouched = false;
   const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },

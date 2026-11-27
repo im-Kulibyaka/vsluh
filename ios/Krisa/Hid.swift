@@ -804,7 +804,7 @@ struct TouchpadPanel: View {
         HidKey("Ctrl+Shift", 0x01 | 0x02, 0), HidKey("Ctrl+Space", 0x01, 0x2C),
     ]
 
-    private static let flashURL = URL(string: "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/")
+    private static let flashURL = URL(string: "https://im-kulibyaka.github.io/vsluh/irbis/flash/")
 
     private var layoutKey: HidKey { TouchpadPanel.layouts[min(max(layout, 0), TouchpadPanel.layouts.count - 1)] }
     /// Множитель курсора по ползунку: 0.5 … 3.
@@ -2786,13 +2786,13 @@ struct ShowTabPanel: View {
         "Чёрный экран на доске только для звуков: жмёте кнопки здесь — звук играет там."
     ]
     private var pageUrl: String {
-        let base: String = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/"
+        let base: String = "https://im-kulibyaka.github.io/vsluh/irbis/"
         return base + (mode == 1 ? "show/" : mode == 2 ? "sp/" : "pad/")
     }
     /// Для «экран·пульт» — короткая ссылка clck.ru, для остальных — полный адрес страницы.
     private var shareUrl: String { mode == 1 ? "https://clck.ru/3XBmBy" : pageUrl }
     private func url(_ tr: Bool) -> String {
-        let base: String = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/"
+        let base: String = "https://im-kulibyaka.github.io/vsluh/irbis/"
         let page: String = mode == 1 ? "show/" : mode == 2 ? "sp/" : "pad/"
         return base + page + "?" + ShowTabPanel.themeQuery(tr)
     }
@@ -2864,8 +2864,8 @@ struct FirmwarePanel: View {
     @State private var total = 0
     @State private var result: String?
 
-    private static let base = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/"
-    private static let flashURL = URL(string: "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/")
+    private static let base = "https://im-kulibyaka.github.io/vsluh/irbis/flash/"
+    private static let flashURL = URL(string: "https://im-kulibyaka.github.io/vsluh/irbis/flash/")
 
     /// Имя app-образа по флагам INFO: тип прошивки и чип.
     private var imageName: String {
