@@ -3342,7 +3342,7 @@ class MainActivity : Activity() {
         private const val PAD_URL = "https://im-kulibyaka.github.io/vsluh/irbis/pad/"
         private const val SP_URL = "https://im-kulibyaka.github.io/vsluh/irbis/sp/"
         private const val REQ_FILE = 73
-        private const val SHORT_URL = "https://clck.ru/3XBmBy"   // российский сокращатель (Яндекс) — работает без VPN
+        private const val SHORT_URL = "https://clck.ru/3XGzyf"   // российский сокращатель (Яндекс) — работает без VPN
         private const val PREF_PROJ = "proj_brand"
         private const val ACTION_PERMISSION = "ru.irbis.remote.USB_PERMISSION"
         private const val ACTION_FLASH_PERM = "ru.irbis.remote.USB_FLASH_PERMISSION"

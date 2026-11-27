@@ -2790,7 +2790,7 @@ struct ShowTabPanel: View {
         return base + (mode == 1 ? "show/" : mode == 2 ? "sp/" : "pad/")
     }
     /// Для «экран·пульт» — короткая ссылка clck.ru, для остальных — полный адрес страницы.
-    private var shareUrl: String { mode == 1 ? "https://clck.ru/3XBmBy" : pageUrl }
+    private var shareUrl: String { mode == 1 ? "https://clck.ru/3XGzyf" : pageUrl }
     private func url(_ tr: Bool) -> String {
         let base: String = "https://im-kulibyaka.github.io/vsluh/irbis/"
         let page: String = mode == 1 ? "show/" : mode == 2 ? "sp/" : "pad/"

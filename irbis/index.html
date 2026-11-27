@@ -3866,7 +3866,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWor
 
 /* [▣] Шоу: клик — открыть; долгое нажатие / правый клик — скопировать короткую ссылку */
 (function(){ var b=document.querySelector('.hbtns a[href="show/"]'); if(!b) return;
-  var SHORT='https://clck.ru/3XBmBy', t;
+  var SHORT='https://clck.ru/3XGzyf', t;
   function copy(e){ if(e&&e.preventDefault) e.preventDefault();
     try{ navigator.clipboard && navigator.clipboard.writeText(SHORT); }catch(_){}
     var o=b.textContent; b.textContent='[✓]'; setTimeout(function(){ b.textContent=o; },1200); }
