@@ -24,7 +24,7 @@ struct LibModel: Codable {
 }
 
 enum IrLib {
-    static let base: String = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/lib/"
+    static let base: String = "https://im-kulibyaka.github.io/vsluh/irbis/lib/"
 
     /// Младшие байты из hex-строки, младший байт первым: "0700" → [0x07, 0x00].
     static func bytes(_ hex: String?) -> [Int] {

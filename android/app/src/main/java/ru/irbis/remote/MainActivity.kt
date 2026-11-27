@@ -1865,7 +1865,7 @@ class MainActivity : Activity() {
             override fun shouldOverrideUrlLoading(v: android.webkit.WebView, r: android.webkit.WebResourceRequest): Boolean {
                 val u = r.url
                 if (u.lastPathSegment?.startsWith("krisa37-show.") == true) { downloadFile(u); return true }   // файл-ссылка — скачать
-                if ((u.scheme == "http" || u.scheme == "https") && u.host == "mikhailkulinskii1910-jpg.github.io") return false
+                if ((u.scheme == "http" || u.scheme == "https") && u.host == "im-kulibyaka.github.io") return false
                 if (u.scheme == "http" || u.scheme == "https") { openExternal(u); return true }
                 return false
             }
@@ -3337,10 +3337,10 @@ class MainActivity : Activity() {
         private const val TAB_LIB = "lib"
         private const val TAB_SHOW = "show"
         private const val REQ_BT = 38
-        private const val FLASH_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/"
-        private const val SHOW_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/show/"
-        private const val PAD_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/pad/"
-        private const val SP_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/sp/"
+        private const val FLASH_URL = "https://im-kulibyaka.github.io/vsluh/irbis/flash/"
+        private const val SHOW_URL = "https://im-kulibyaka.github.io/vsluh/irbis/show/"
+        private const val PAD_URL = "https://im-kulibyaka.github.io/vsluh/irbis/pad/"
+        private const val SP_URL = "https://im-kulibyaka.github.io/vsluh/irbis/sp/"
         private const val REQ_FILE = 73
         private const val SHORT_URL = "https://clck.ru/3XBmBy"   // российский сокращатель (Яндекс) — работает без VPN
         private const val PREF_PROJ = "proj_brand"

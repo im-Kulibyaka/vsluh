@@ -11,4 +11,4 @@ python3 mog/build.py config.json
 Формат `config.json` описан в начале `build.py`. Результат: `artifact.html`, `index.html`
 (для GitHub Pages) и `pult.html` (пульт подмены, если задан `swap`).
 
-Пример: презентация «Захарово» — https://mikhailkulinskii1910-jpg.github.io/vsluh/zakharovo/
+Пример: презентация «Захарово» — https://im-kulibyaka.github.io/vsluh/zakharovo/

@@ -12,7 +12,7 @@ import java.net.URL
  * Байты кадра идут младшим битом вперёд; адрес/команда в hex — младший байт первым ("0700" → байт0=0x07).
  */
 object Lib {
-    const val BASE = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/lib/"
+    const val BASE = "https://im-kulibyaka.github.io/vsluh/irbis/lib/"
 
     sealed class Button {
         abstract val name: String

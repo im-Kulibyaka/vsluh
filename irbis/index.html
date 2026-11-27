@@ -2600,7 +2600,7 @@ function hidText(text) {
     + '<div class="tp" aria-label="Тачпад"><span>один палец — курсор · касание — клик · два пальца — прокрутка и правый клик · удержание — перетащить</span></div>'
     + '<div class="srow hbtn"></div><div class="srow hmbtn"></div><div class="hsens"></div>'
     + '<div class="srow htxt"><input type="text" class="hin" placeholder="⌨ печатать…" autocomplete="off" spellcheck="false"></div><div class="srow hlang"></div>'
-    + '<div class="srow hmods"></div><div class="hkeys"></div><p class="xl">мои сочетания</p><div class="hkeys hcombos"></div></div><div class="hled" hidden></div><div class="hscr" hidden></div><div class="htv" hidden></div><div class="hgp" hidden></div><div class="hpres" hidden></div><div class="hfw" hidden></div><a class="hflash" href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
+    + '<div class="srow hmods"></div><div class="hkeys"></div><p class="xl">мои сочетания</p><div class="hkeys hcombos"></div></div><div class="hled" hidden></div><div class="hscr" hidden></div><div class="htv" hidden></div><div class="hgp" hidden></div><div class="hpres" hidden></div><div class="hfw" hidden></div><a class="hflash" href="https://im-kulibyaka.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
   box.querySelector('.hcon').addEventListener('click', () => HID.state === 'on' ? hidDisconnect() : hidConnect());
   // клики Л / С / П
   [['[ Л ]', 1], ['[ С ]', 4], ['[ П ]', 2]].forEach(([l, m]) => sBtn(box.querySelector('.hbtn'), l, () => hidClick(m)));
@@ -3267,7 +3267,7 @@ function hidText(text) {
      Образ берём из flash/ рядом со страницей; имя — по INFO (hid-c3 + chip=c3|s3). Пишем только в app-раздел.
      Успех: INFO прислал «ota=ok» ЛИБО разрыв связи после отправки всех данных (плата перезагрузилась). Ошибка: «ota=err» или таймаут ~3 мин. */
   const FW = box.querySelector('.hfw');
-  const FW_CHUNK = 240, FW_TIMEOUT = 180000, FLASH_URL = 'https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/';
+  const FW_CHUNK = 240, FW_TIMEOUT = 180000, FLASH_URL = 'https://im-kulibyaka.github.io/vsluh/irbis/flash/';
   let fwBusy = false;
   /** Имя app-образа по INFO: не krisa37-hid-c3 → S3 USB; c3 — по чипу (c3 или s3-bt). */
   const fwImageName = () => !HID.c3 ? 'krisa37-hid-app.bin' : HID.chip === 's3' ? 'krisa37-hid-s3bt-app.bin' : 'krisa37-hid-c3-app.bin';
